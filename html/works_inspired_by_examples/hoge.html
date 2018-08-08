@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>hoge | threejs</title>
+    <link rel="stylesheet" media="all" href="../../css/style.css">
+  </head>
+  <body>
+    <a class="back-to-top" href="../index.html">back to top</a>
+    <div id="ratio">
+      <p id="x-axis"></p>
+      <p id="y-axis"></p>
+      <p id="z-axis"></p>
+    </div>
+    <script src="../../js/three.js"></script>
+    <script>
+
+    let scene, camera, renderer, geometry, material, line;
+
+    // Sceneを作成
+    function initScene() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.z = 10;
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+    };
+
+    // 線形を作成
+    function rayCast(x) {
+      geometry = new THREE.Geometry();
+      let vertex1 = new THREE.Vector3(x, 1, 0);
+      let vertex2 = new THREE.Vector3(x, 2, 0);
+      // let vertex1 = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+      // let vertex2 = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+      geometry.vertices.push(vertex1);
+      geometry.vertices.push(vertex2);
+      material = new THREE.LineBasicMaterial({ color: 0xFFFFF });
+      line = new THREE.Line(geometry, material);
+      scene.add(line);
+
+    };
+
+    // レンダリングをループ
+    function animate() {
+      line.geometry.verticesNeedUpdate = true;
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    };
+
+    let up = down = 0;
+    let up_el = document.getElementById('x-axis');
+    let down_el = document.getElementById('y-axis');
+    function upAndDown() {
+      if (down % 100 === 0) {
+        line.geometry.vertices[1].y += 0.03;
+        up ++;
+        up_el.innerHTML = up;
+        down = 0;
+      }
+      if (up % 100 === 0) {
+        line.geometry.vertices[1].y -= 0.03;
+        down ++;
+        down_el.innerHTML = down;
+        up = 0;
+      }
+    };
+
+
+
+    function getRandomColor() {
+      return '0x' + Math.floor(Math.random() * 16777215).toString(16);
+    }
+
+    // リサイズ
+    function resize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+
+    window.addEventListener('resize', resize, false);
+
+    initScene();
+    rayCast(0);
+    animate();
+    // setInterval(easeInOutUp, 100);
+
+
+
+    let t = 0;
+    let timer = setInterval(function() {
+      easeInOutUp();
+    }, 10);
+
+    function easeInOutUp() {
+      line.geometry.vertices[1].y = - 2*t*t + 2*t + 2; // 上に凸の二次関数 + yの初期値
+      if (t > 0.5) {
+        line.geometry.vertices[1].y = 2*t*t - 2*t + 1 + 2; // 下に凸の二次関数 + yの初期値
+      }
+      t += 0.01;
+      if (t > 1) {
+        clearInterval(timer);
+      }
+      console.log(line.geometry.vertices[1].y);
+    };
+
+    // t: current time, b: beginning value, c: change In value, d: duration
+    let easeInBack = function( t, b, c, d, s ) {
+      if ( s == undefined ) s = 1.70158;
+  		return c * ( t /= d ) * t * ( ( s + 1 ) * t - s ) + b;
+    }
+
+    // easeInBack: function (x, t, b, c, d, s) {
+  	// 	if (s == undefined) s = 1.70158;
+  	// 	return c*(t/=d)*t*((s+1)*t - s) + b;
+  	// },
+
+
+    </script>
+  </body>
+</html>

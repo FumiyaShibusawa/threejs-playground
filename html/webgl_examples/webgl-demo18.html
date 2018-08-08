@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>webgl-demo18</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/libs/minMatrix.js"></script>
+  </head>
+  <style media="screen">
+    body h3 {
+      margin-bottom: 10px;
+    }
+    body p {
+      margin-bottom: 10px;
+    }
+    .pane_wrapper {
+      display: table;
+      table-layout: auto;
+      max-width: 1200px;
+      margin: auto;
+      padding: 20px;
+    }
+    #pane_left {
+      width: 270px;
+      display: table-cell;
+      max-width: 270px;
+      vertical-align: top;
+    }
+    #pane_right {
+      display: table-cell;
+      max-width: 830px;
+      vertical-align: top;
+    }
+    #canvas {
+      position: fixed;
+      margin-right: 20px;
+      box-shadow: 0 2px 2px 0 rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.08);
+    }
+    .menu {
+      padding: 20px;
+      border-bottom: 1px solid #dddddd;
+    }
+    .menu p, .menu div {
+      color: #aaa;
+    }
+    .menu_indent {
+      margin-left: 20px;
+      margin-bottom: 20px;
+    }
+    .pane_wrapper__half {
+      display: table;
+      table-layout: auto;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .menu.half_pane {
+      display: table-cell;
+      width: 50%;
+      padding: 20px;
+    }
+    .menu.half_pane:first-child {
+      border-right: 1px solid #ddd;
+    }
+    .ranges {
+      display: flex;
+      justify-content: space-between;
+    }
+    .range_bar {
+      display: inline-block;
+      margin-right: 10px;
+    }
+    .range_bar:not(:first-child) {
+      margin-left: 30px;
+    }
+  </style>
+  <body>
+    <div class="pane_wrapper">
+      <div id="pane_left">
+        <canvas id="canvas"></canvas>
+      </div>
+      <div id="pane_right">
+        <section class="menu">
+          <h2>context clear color</h2>
+          <div class="menu_indent ranges">
+            <input class="range_bar" id="range_c_red" type="range" value="20" min="0" max="100">red</input>
+            <input class="range_bar" id="range_c_green" type="range" value="20" min="0" max="100">green</input>
+            <input class="range_bar" id="range_c_blue" type="range" value="20" min="0" max="100">blue</input>
+            <input class="range_bar" id="range_c_alpha" type="range" value="100" min="0" max="100">alpha</input>
+          </div>
+        </section>
+        <section class="menu">
+          <h2>blend constant color</h2>
+          <div class="menu_indent ranges">
+            <input class="range_bar" id="range_b_red" type="range" value="0" min="0" max="100">red</input>
+            <input class="range_bar" id="range_b_green" type="range" value="0" min="0" max="100">green</input>
+            <input class="range_bar" id="range_b_blue" type="range" value="0" min="0" max="100">blue</input>
+            <input class="range_bar" id="range_b_alpha" type="range" value="100" min="0" max="100">alpha</input>
+          </div>
+        </section>
+        <div class="pane_wrapper__half">
+          <section class="menu half_pane">
+            <h2>model 1</h2>
+            <section class="menu_indent">
+              <h3>blend</h3>
+              <div class="menu_indent">
+                <p><input id="m1_blend" type="checkbox"> enable blend</input></p>
+                <p>vertexAlpha <input id="range_m1_vertexAlpha" type="range" value="100" min="0" max="100"> (0% - 100%)</input></p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>color equation</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m1_color_equation">
+                    <option>gl.FUNC_ADD</option>
+                    <option>gl.FUNC_SUBTRACT</option>
+                    <option>gl.FUNC_REVERSE_SUBTRACT</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>alpha equation</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m1_alpha_equation">
+                    <option>gl.FUNC_ADD</option>
+                    <option>gl.FUNC_SUBTRACT</option>
+                    <option>gl.FUNC_REVERSE_SUBTRACT</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>source color blend factor</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m1_source_color_blend">
+                    <option>gl.ZERO</option>
+                    <option selected="">gl.ONE</option>
+                    <option>gl.SRC_COLOR</option>
+                    <option>gl.DST_COLOR</option>
+                    <option>gl.ONE_MINUS_SRC_COLOR</option>
+                    <option>gl.ONE_MINUS_DST_COLOR</option>
+                    <option>gl.SRC_ALPHA</option>
+                    <option>gl.DST_ALPHA</option>
+                    <option>gl.ONE_MINUS_SRC_ALPHA</option>
+                    <option>gl.ONE_MINUS_DST_ALPHA</option>
+                    <option>gl.CONSTANT_COLOR</option>
+                    <option>gl.ONE_MINUS_CONSTANT_COLOR</option>
+                    <option>gl.CONSTANT_ALPHA</option>
+                    <option>gl.ONE_MINUS_CONSTANT_ALPHA</option>
+                    <option>gl.SRC_ALPHA_SATURATE</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>destination color blend factor</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m1_dest_color_blend">
+                    <option selected="">gl.ZERO</option>
+                    <option>gl.ONE</option>
+                    <option>gl.SRC_COLOR</option>
+                    <option>gl.DST_COLOR</option>
+                    <option>gl.ONE_MINUS_SRC_COLOR</option>
+                    <option>gl.ONE_MINUS_DST_COLOR</option>
+                    <option>gl.SRC_ALPHA</option>
+                    <option>gl.DST_ALPHA</option>
+                    <option>gl.ONE_MINUS_SRC_ALPHA</option>
+                    <option>gl.ONE_MINUS_DST_ALPHA</option>
+                    <option>gl.CONSTANT_COLOR</option>
+                    <option>gl.ONE_MINUS_CONSTANT_COLOR</option>
+                    <option>gl.CONSTANT_ALPHA</option>
+                    <option>gl.ONE_MINUS_CONSTANT_ALPHA</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>source alpha blend factor</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m1_source_alpha_blend">
+                    <option>gl.ZERO</option>
+                    <option selected="">gl.ONE</option>
+                    <option>gl.SRC_COLOR</option>
+                    <option>gl.DST_COLOR</option>
+                    <option>gl.ONE_MINUS_SRC_COLOR</option>
+                    <option>gl.ONE_MINUS_DST_COLOR</option>
+                    <option>gl.SRC_ALPHA</option>
+                    <option>gl.DST_ALPHA</option>
+                    <option>gl.ONE_MINUS_SRC_ALPHA</option>
+                    <option>gl.ONE_MINUS_DST_ALPHA</option>
+                    <option>gl.CONSTANT_COLOR</option>
+                    <option>gl.ONE_MINUS_CONSTANT_COLOR</option>
+                    <option>gl.CONSTANT_ALPHA</option>
+                    <option>gl.ONE_MINUS_CONSTANT_ALPHA</option>
+                    <option>gl.SRC_ALPHA_SATURATE</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>destination alpha blend factor</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m1_dest_alpha_blend">
+                    <option selected="">gl.ZERO</option>
+                    <option>gl.ONE</option>
+                    <option>gl.SRC_COLOR</option>
+                    <option>gl.DST_COLOR</option>
+                    <option>gl.ONE_MINUS_SRC_COLOR</option>
+                    <option>gl.ONE_MINUS_DST_COLOR</option>
+                    <option>gl.SRC_ALPHA</option>
+                    <option>gl.DST_ALPHA</option>
+                    <option>gl.ONE_MINUS_SRC_ALPHA</option>
+                    <option>gl.ONE_MINUS_DST_ALPHA</option>
+                    <option>gl.CONSTANT_COLOR</option>
+                    <option>gl.ONE_MINUS_CONSTANT_COLOR</option>
+                    <option>gl.CONSTANT_ALPHA</option>
+                    <option>gl.ONE_MINUS_CONSTANT_ALPHA</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+          </section>
+          <section class="menu half_pane">
+            <h2>model 2</h2>
+            <section class="menu_indent">
+              <h3>blend</h3>
+              <div class="menu_indent">
+                <p><input id="m2_blend" type="checkbox" checked> enable blend</input></p>
+                <p>vertexAlpha <input id="range_m2_vertexAlpha" type="range" value="50" min="0" max="100"> (0% - 100%)</input></p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>color equation</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m2_color_equation">
+                    <option>gl.FUNC_ADD</option>
+                    <option>gl.FUNC_SUBTRACT</option>
+                    <option>gl.FUNC_REVERSE_SUBTRACT</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>alpha equation</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m2_alpha_equation">
+                    <option>gl.FUNC_ADD</option>
+                    <option>gl.FUNC_SUBTRACT</option>
+                    <option>gl.FUNC_REVERSE_SUBTRACT</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>source color blend factor</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m2_source_color_blend">
+                    <option>gl.ZERO</option>
+                    <option>gl.ONE</option>
+                    <option>gl.SRC_COLOR</option>
+                    <option>gl.DST_COLOR</option>
+                    <option>gl.ONE_MINUS_SRC_COLOR</option>
+                    <option>gl.ONE_MINUS_DST_COLOR</option>
+                    <option selected>gl.SRC_ALPHA</option>
+                    <option>gl.DST_ALPHA</option>
+                    <option>gl.ONE_MINUS_SRC_ALPHA</option>
+                    <option>gl.ONE_MINUS_DST_ALPHA</option>
+                    <option>gl.CONSTANT_COLOR</option>
+                    <option>gl.ONE_MINUS_CONSTANT_COLOR</option>
+                    <option>gl.CONSTANT_ALPHA</option>
+                    <option>gl.ONE_MINUS_CONSTANT_ALPHA</option>
+                    <option>gl.SRC_ALPHA_SATURATE</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>destination color blend factor</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m2_dest_color_blend">
+                    <option selected="">gl.ZERO</option>
+                    <option>gl.ONE</option>
+                    <option>gl.SRC_COLOR</option>
+                    <option>gl.DST_COLOR</option>
+                    <option>gl.ONE_MINUS_SRC_COLOR</option>
+                    <option>gl.ONE_MINUS_DST_COLOR</option>
+                    <option>gl.SRC_ALPHA</option>
+                    <option>gl.DST_ALPHA</option>
+                    <option selected>gl.ONE_MINUS_SRC_ALPHA</option>
+                    <option>gl.ONE_MINUS_DST_ALPHA</option>
+                    <option>gl.CONSTANT_COLOR</option>
+                    <option>gl.ONE_MINUS_CONSTANT_COLOR</option>
+                    <option>gl.CONSTANT_ALPHA</option>
+                    <option>gl.ONE_MINUS_CONSTANT_ALPHA</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>source alpha blend factor</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m2_source_alpha_blend">
+                    <option>gl.ZERO</option>
+                    <option selected>gl.ONE</option>
+                    <option>gl.SRC_COLOR</option>
+                    <option>gl.DST_COLOR</option>
+                    <option>gl.ONE_MINUS_SRC_COLOR</option>
+                    <option>gl.ONE_MINUS_DST_COLOR</option>
+                    <option>gl.SRC_ALPHA</option>
+                    <option>gl.DST_ALPHA</option>
+                    <option>gl.ONE_MINUS_SRC_ALPHA</option>
+                    <option>gl.ONE_MINUS_DST_ALPHA</option>
+                    <option>gl.CONSTANT_COLOR</option>
+                    <option>gl.ONE_MINUS_CONSTANT_COLOR</option>
+                    <option>gl.CONSTANT_ALPHA</option>
+                    <option>gl.ONE_MINUS_CONSTANT_ALPHA</option>
+                    <option>gl.SRC_ALPHA_SATURATE</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+            <section class="menu_indent">
+              <h3>destination alpha blend factor</h3>
+              <div class="menu_indent">
+                <p>
+                  <select id="m2_dest_alpha_blend">
+                    <option>gl.ZERO</option>
+                    <option selected>gl.ONE</option>
+                    <option>gl.SRC_COLOR</option>
+                    <option>gl.DST_COLOR</option>
+                    <option>gl.ONE_MINUS_SRC_COLOR</option>
+                    <option>gl.ONE_MINUS_DST_COLOR</option>
+                    <option>gl.SRC_ALPHA</option>
+                    <option>gl.DST_ALPHA</option>
+                    <option>gl.ONE_MINUS_SRC_ALPHA</option>
+                    <option>gl.ONE_MINUS_DST_ALPHA</option>
+                    <option>gl.CONSTANT_COLOR</option>
+                    <option>gl.ONE_MINUS_CONSTANT_COLOR</option>
+                    <option>gl.CONSTANT_ALPHA</option>
+                    <option>gl.ONE_MINUS_CONSTANT_ALPHA</option>
+                  </select>
+                </p>
+              </div>
+            </section>
+          </section>
+        </div>
+      </div>
+    </div>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec4 color;
+    attribute vec2 textureCoord;
+    uniform mat4 mvpMatrix;
+    uniform float vertexAlpha;
+    varying vec4 vColor;
+    varying vec2 vTextureCoord;
+
+    void main() {
+      vColor = vec4( color.rgb, color.a * vertexAlpha );
+      vTextureCoord = textureCoord;
+      gl_Position = mvpMatrix * vec4( position, 1.0 );
+    }
+    </script>
+
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform sampler2D texture0;
+    uniform int useTexture;
+    varying vec4 vColor;
+    varying vec2 vTextureCoord;
+
+    void main() {
+      vec4 destColor = vec4( 0.0 );
+      if ( bool( useTexture ) ) {
+        vec4 smpColor0 = texture2D( texture0, vTextureCoord );
+        destColor = vColor * smpColor0;
+      } else {
+        destColor = vColor;
+      }
+      gl_FragColor = destColor;
+    }
+    </script>
+
+    <script type="text/javascript">
+    var canvas, gl;
+    var attLocation = [];
+    var attStride = [];
+    var uniLocation = [];
+
+    window.onload = function() {
+      // canvasエレメントを取得
+      canvas = document.getElementById( 'canvas' );
+      canvas.width = 250;
+      canvas.height = 250;
+
+      // webglコンテキストを取得
+      gl = canvas.getContext( 'webgl' ) || canvas.getContext( 'experimental-webgl' );
+      prg = create_program( create_shader( 'vs' ), create_shader( 'fs' ) );
+
+      var range_c_red = document.getElementById( 'range_c_red' );
+      var range_c_green = document.getElementById( 'range_c_green' );
+      var range_c_blue = document.getElementById( 'range_c_blue' );
+      var range_c_alpha = document.getElementById( 'range_c_alpha' );
+
+      var range_b_red = document.getElementById( 'range_b_red' );
+      var range_b_green = document.getElementById( 'range_b_green' );
+      var range_b_blue = document.getElementById( 'range_b_blue' );
+      var range_b_alpha = document.getElementById( 'range_b_alpha' );
+
+      var m1_blend = document.getElementById( 'm1_blend' );
+      var range_m1_vertexAlpha = document.getElementById( 'range_m1_vertexAlpha' );
+      var m1_color_equation = document.getElementById( 'm1_color_equation' );
+      var m1_alpha_equation = document.getElementById( 'm1_alpha_equation' );
+      var m1_source_color_blend = document.getElementById( 'm1_source_color_blend' );
+      var m1_dest_color_blend = document.getElementById( 'm1_dest_color_blend' );
+      var m1_source_alpha_blend = document.getElementById( 'm1_source_alpha_blend' );
+      var m1_dest_alpha_blend = document.getElementById( 'm1_dest_alpha_blend' );
+
+      var m2_blend = document.getElementById( 'm2_blend' );
+      var range_m2_vertexAlpha = document.getElementById( 'range_m2_vertexAlpha' );
+      var m2_color_equation = document.getElementById( 'm2_color_equation' );
+      var m2_alpha_equation = document.getElementById( 'm2_alpha_equation' );
+      var m2_source_color_blend = document.getElementById( 'm2_source_color_blend' );
+      var m2_dest_color_blend = document.getElementById( 'm2_dest_color_blend' );
+      var m2_source_alpha_blend = document.getElementById( 'm2_source_alpha_blend' );
+      var m2_dest_alpha_blend = document.getElementById( 'm2_dest_alpha_blend' );
+
+      // equation constant array
+      var equationList = new Array();
+      equationList[0]  = gl.FUNC_ADD;
+      equationList[1]  = gl.FUNC_SUBTRACT;
+      equationList[2]  = gl.FUNC_REVERSE_SUBTRACT;
+
+      // blend factor constant array
+      var blendFctList = new Array();
+      blendFctList[0]  = gl.ZERO;
+      blendFctList[1]  = gl.ONE;
+      blendFctList[2]  = gl.SRC_COLOR;
+      blendFctList[3]  = gl.DST_COLOR;
+      blendFctList[4]  = gl.ONE_MINUS_SRC_COLOR;
+      blendFctList[5]  = gl.ONE_MINUS_DST_COLOR;
+      blendFctList[6]  = gl.SRC_ALPHA;
+      blendFctList[7]  = gl.DST_ALPHA;
+      blendFctList[8]  = gl.ONE_MINUS_SRC_ALPHA;
+      blendFctList[9]  = gl.ONE_MINUS_DST_ALPHA;
+      blendFctList[10] = gl.CONSTANT_COLOR;
+      blendFctList[11] = gl.ONE_MINUS_CONSTANT_COLOR;
+      blendFctList[12] = gl.CONSTANT_ALPHA;
+      blendFctList[13] = gl.ONE_MINUS_CONSTANT_ALPHA;
+      blendFctList[14] = gl.SRC_ALPHA_SATURATE;
+
+      // attribute
+      // attributeLocationを配列に取得
+      var attLocation = new Array();
+      attLocation[ 0 ] = gl.getAttribLocation( prg, 'position' );
+      attLocation[ 1 ] = gl.getAttribLocation( prg, 'color' );
+      attLocation[ 2 ] = gl.getAttribLocation( prg, 'textureCoord' );
+
+      // attributeの要素数を配列に格納
+      attStride[ 0 ] = 3;
+      attStride[ 1 ] = 4;
+      attStride[ 2 ] = 2;
+
+      // 頂点の位置
+      var position = [
+        -1.0,  1.0,  0.0,
+         1.0,  1.0,  0.0,
+        -1.0, -1.0,  0.0,
+         1.0, -1.0,  0.0
+      ];
+
+      // 頂点色
+      var color = [
+        1.0, 0.0, 0.0, 1.0,
+        0.0, 1.0, 0.0, 1.0,
+        0.0, 0.0, 1.0, 1.0,
+        1.0, 1.0, 1.0, 1.0
+      ];
+
+      // テクスチャ座標
+      var textureCoord = [
+        0.0, 0.0,
+        1.0, 0.0,
+        0.0, 1.0,
+        1.0, 1.0
+      ];
+
+      // 頂点インデックス
+      var index = [
+        0, 1, 2,
+        3, 2, 1
+      ];
+
+      // VBOとIBOの生成
+      var vPosition = create_vbo( position );
+      var vColor = create_vbo( color );
+      var vTextureCoord = create_vbo( textureCoord );
+      var VBOList = [ vPosition, vColor, vTextureCoord ];
+      var vIndex = create_ibo( index );
+
+      // VBOとIBOの登録
+      set_attribute( VBOList, attLocation, attStride );
+      gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, vIndex );
+
+      // uniformLocationを配列に取得
+      uniLocation[ 0 ] = gl.getUniformLocation( prg, 'mvpMatrix' );
+      uniLocation[ 1 ] = gl.getUniformLocation( prg, 'vertexAlpha' );
+      uniLocation[ 2 ] = gl.getUniformLocation( prg, 'texture0' );
+      uniLocation[ 3 ] = gl.getUniformLocation( prg, 'useTexture' );
+
+      // 各種行列の生成と初期化
+      var m = new matIV();
+      var mMatrix   = m.initialize(m.create());
+      var vMatrix   = m.initialize(m.create());
+      var pMatrix   = m.initialize(m.create());
+      var tmpMatrix = m.initialize(m.create());
+      var mvpMatrix = m.initialize(m.create());
+
+      // ビュー・プロジェクション座標変換行列
+      m.lookAt([0.0, 0.0, 7.0], [0, 0, 0], [0, 1, 0], vMatrix);
+      m.perspective( 45, canvas.width / canvas.height, 0.1, 100.0, pMatrix );
+      m.multiply( pMatrix, vMatrix, tmpMatrix );
+
+      // 深度テストを有効にする
+      gl.enable( gl.DEPTH_TEST );
+      gl.depthFunc( gl.LEQUAL );
+
+      // テクスチャ用変数の宣言
+      var texture0 = null;
+      // テクスチャを生成
+      create_texture( 'shounen.jpg', 0 );
+      gl.activeTexture( gl.TEXTURE0 ); // 有効にするテクスチャユニットを指定
+
+      // カウンタの宣言
+      var count = 0;
+
+      // 恒常ループ
+      ( function() {
+        // canvasを初期化
+        var c_red = parseFloat( range_c_red.value / 100 );
+        var c_green = parseFloat( range_c_green.value / 100 );
+        var c_blue = parseFloat( range_c_blue.value / 100 );
+        var c_alpha = parseFloat( range_c_alpha.value / 100 );
+        gl.clearColor( c_red, c_green, c_blue, c_alpha );
+        gl.clearDepth( 1.0 );
+        gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT );
+
+        c_red = parseFloat( range_b_red.value / 100 );
+        c_green = parseFloat( range_b_green.value / 100 );
+        c_blue = parseFloat( range_b_blue.value / 100 );
+        c_alpha = parseFloat( range_b_alpha.value / 100 );
+        gl.blendColor( c_red, c_green, c_blue, c_alpha );
+
+        var m1_vertexAlpha = parseFloat( range_m1_vertexAlpha.value / 100 );
+        var m2_vertexAlpha = parseFloat( range_m2_vertexAlpha.value / 100 );
+
+        // カウンタを元にラジアンを算出
+        count++;
+        var rad = ( count % 360 ) * Math.PI / 180;
+
+        // textureありの正方形を生成
+        m.initialize( mMatrix );
+        m.translate( mMatrix, [ 0, 0.5, 0 ], mMatrix );
+        m.rotate( mMatrix, rad, [ 0, 1, 0 ], mMatrix );
+        m.multiply( tmpMatrix, mMatrix, mvpMatrix );
+
+        gl.bindTexture( gl.TEXTURE_2D, texture0 ); // テクスチャをバインドする
+
+        if ( m1_blend.checked ) {
+          gl.enable( gl.BLEND );
+        } else {
+          gl.disable( gl.BLEND );
+        };
+
+        var equation_color = equationList[ m1_color_equation.selectedIndex ];
+        var equation_alpha = equationList[ m1_alpha_equation.selectedIndex ];
+        var source_color = blendFctList[ m1_source_color_blend.selectedIndex ];
+        var dest_color = blendFctList[ m1_dest_color_blend.selectedIndex ];
+        var source_alpha = blendFctList[ m1_source_alpha_blend.selectedIndex ];
+        var dest_alpha = blendFctList[ m1_dest_alpha_blend.selectedIndex ];
+        gl.blendEquationSeparate( equation_color, equation_alpha );
+        gl.blendFuncSeparate( source_color, dest_color, source_alpha, dest_alpha );
+
+        gl.uniformMatrix4fv( uniLocation[ 0 ], false, mvpMatrix );
+        gl.uniform1f( uniLocation[ 1 ], m1_vertexAlpha ); // uniform変数にテクスチャを登録
+        gl.uniform1i( uniLocation[ 2 ], 0 ); // uniform変数にテクスチャを登録
+        gl.uniform1i( uniLocation[ 3 ], true ); // useTexture
+        gl.drawElements( gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0 );
+
+
+        // textureなしの正方形を生成
+        m.initialize( mMatrix );
+        m.translate( mMatrix, [ 0, -0.5, 0 ], mMatrix );
+        m.rotate( mMatrix, rad, [ 0, 0, 1 ], mMatrix );
+        m.multiply( tmpMatrix, mMatrix, mvpMatrix );
+
+        gl.bindTexture( gl.TEXTURE_2D, null ); // テクスチャをバインドする
+        if ( m2_blend.checked ) {
+          gl.enable( gl.BLEND );
+        } else {
+          gl.disable( gl.BLEND );
+        };
+        equation_color = equationList[ m2_color_equation.selectedIndex ];
+        equation_alpha = equationList[ m2_alpha_equation.selectedIndex ];
+        source_color = blendFctList[ m2_source_color_blend.selectedIndex ];
+        dest_color = blendFctList[ m2_dest_color_blend.selectedIndex ];
+        source_alpha = blendFctList[ m2_source_alpha_blend.selectedIndex ];
+        dest_alpha = blendFctList[ m2_dest_alpha_blend.selectedIndex ];
+        gl.blendEquationSeparate( equation_color, equation_alpha );
+        gl.blendFuncSeparate( source_color, dest_color, source_alpha, dest_alpha );
+
+        gl.uniformMatrix4fv( uniLocation[ 0 ], false, mvpMatrix );
+        gl.uniform1f( uniLocation[ 1 ], m2_vertexAlpha ); // uniform変数にテクスチャを登録
+        gl.uniform1i( uniLocation[ 2 ], 0 ); // uniform変数にテクスチャを登録
+        gl.uniform1i( uniLocation[ 3 ], false ); // useTexture
+        gl.drawElements( gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0 );
+
+        // コンテキストの再描画
+        gl.flush();
+
+        // ループのために再帰呼び出し
+        setTimeout(arguments.callee, 1000 / 30);
+      })();
+
+
+      // create WebGLShader object
+      function create_shader( id ) {
+        var shader;
+        var scriptElement = document.getElementById( id );
+        if ( !scriptElement ) { return };
+        switch ( scriptElement.type ) {
+          case 'x-shader/x-vertex':
+            shader = gl.createShader( gl.VERTEX_SHADER );
+            break;
+          case 'x-shader/x-fragment':
+            shader = gl.createShader( gl.FRAGMENT_SHADER );
+            break;
+          default:
+            return;
+        };
+
+        gl.shaderSource( shader, scriptElement.text );
+        gl.compileShader( shader );
+        if ( gl.getShaderParameter( shader, gl.COMPILE_STATUS ) ) {
+          return shader;
+        } else {
+          alert( gl.getShaderInfoLog( shader ) );
+        }
+      };
+
+      // create WebGLProgram object
+      function create_program( vs, fs ) {
+        var program = gl.createProgram();
+        gl.attachShader( program, vs );
+        gl.attachShader( program, fs );
+
+        gl.linkProgram( program );
+
+        if ( gl.getProgramParameter( program, gl.LINK_STATUS ) ) {
+          gl.useProgram( program );
+          return program;
+        } else {
+          alert( gl.getProgramInfoLog( program ) );
+          console.log( gl.getProgramInfoLog( program ) );
+        }
+      };
+
+
+      // create WebGLBuffer for vertex
+      function create_vbo( data ) {
+        var vbo = gl.createBuffer();
+
+        gl.bindBuffer( gl.ARRAY_BUFFER, vbo );
+        gl.bufferData( gl.ARRAY_BUFFER, new Float32Array( data ), gl.STATIC_DRAW );
+        gl.bindBuffer( gl.ARRAY_BUFFER, null );
+        return vbo;
+      };
+
+      function set_attribute( vbo, attL, attS ) {
+        for ( var i in vbo ) {
+          gl.bindBuffer( gl.ARRAY_BUFFER, vbo[ i ] );
+          gl.enableVertexAttribArray( attL[ i ] );
+          gl.vertexAttribPointer( attL[ i ], attS[ i ], gl.FLOAT, false, 0, 0 );
+        }
+      };
+
+      // create WebGLBuffer for index
+      function create_ibo( data ) {
+        var ibo = gl.createBuffer();
+
+        gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, ibo );
+        gl.bufferData( gl.ELEMENT_ARRAY_BUFFER, new Int16Array( data ), gl.STATIC_DRAW );
+        gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, null );
+        return ibo;
+      };
+
+      function create_texture( source, number ) {
+        // イメージオブジェクトの生成
+        var img = new Image();
+
+        // データのオンロードをトリガーにする
+        img.onload = function() {
+          // テクスチャオブジェクトの生成
+          var tex = gl.createTexture();
+
+          // テクスチャをバインドする
+          gl.bindTexture( gl.TEXTURE_2D, tex );
+
+          // テクスチャへイメージを適用
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+          // ミップマップを生成
+          gl.generateMipmap( gl.TEXTURE_2D );
+
+          // テクスチャパラメータの設定
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+
+          // テクスチャのバインドを無効化
+          gl.bindTexture( gl.TEXTURE_2D, null );
+
+          // 生成したテクスチャをグローバル変数に代入
+          switch( number ) {
+            case 0:
+              texture0 = tex;
+              break;
+            case 1:
+              texture1 = tex;
+              break;
+            default:
+              break;
+          };
+        };
+
+        // イメージオブジェクトのソースを指定
+        img.src = source;
+      };
+    };
+    </script>
+  </body>
+</html>

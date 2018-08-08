@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>webgl-demo06</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/libs/minMatrix.js"></script>
+  </head>
+  <style media="screen">
+    #canvas {
+      display: block;
+      margin: 10px auto;
+    }
+  </style>
+  <body>
+    <canvas id="canvas"></canvas>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec4 color;
+    uniform mat4 mvpMatrix;
+    varying vec4 vColor;
+
+    void main() {
+      vColor = color;
+      gl_Position = mvpMatrix * vec4( position, 1.0 );
+    }
+    </script>
+
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec4 vColor;
+    void main() {
+      gl_FragColor = vColor;
+    }
+    </script>
+
+    <script type="text/javascript">
+    let canvas, gl;
+    let attLocation = [];
+    let attStride = [];
+
+    window.onload = function() {
+      canvas = document.getElementById( 'canvas' );
+      canvas.width = canvas.height = 500;
+      gl = canvas.getContext( 'webgl' ) || canvas.getContext( 'experimental-webgl' );
+      prg = create_program( create_shader( 'vs' ), create_shader( 'fs' ) );
+
+      attLocation[ 0 ] = gl.getAttribLocation( prg, 'position' );
+      attLocation[ 1 ] = gl.getAttribLocation( prg, 'color' );
+      attStride[ 0 ] = 3;
+      attStride[ 1 ] = 4;
+
+      let vertex_position = [
+        0.0, 1.0, 0.0,
+        1.0, 0.0, 0.0,
+        -1.0, 0.0, 0.0,
+        0.0, -1.0, 0.0
+      ];
+
+      let vertex_color = [
+        1.0, 0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0, 1.0,
+        0.0, 1.0, 0.0, 1.0,
+        1.0, 1.0, 1.0, 1.0
+      ];
+
+      let index = [
+        0, 1, 2,
+        1, 2, 3
+      ];
+
+      let position_vbo = create_vbo( vertex_position );
+      let color_vbo = create_vbo( vertex_color );
+      set_attribute( [ position_vbo, color_vbo ], attLocation, attStride );
+
+      let ibo = create_ibo( index );
+
+      gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, ibo );
+
+      let uniLocation = gl.getUniformLocation( prg, 'mvpMatrix' );
+
+      // 行列変換処理
+      let m = new matIV();
+
+      let mMatrix = m.initialize( m.create() );
+      let vMatrix = m.initialize( m.create() );
+      let pMatrix = m.initialize( m.create() );
+      let tmpMatrix = m.initialize( m.create() );
+      let mvpMatrix = m.initialize( m.create() );
+
+      // ビュー・プロジェクション座標変換行列
+      m.lookAt( [ 0.0, 0.0, 5.0 ], [ 0.0, 0.0, 0.0 ], [ 0.0, 1.0, 0.0 ], vMatrix );
+      m.perspective( 90, canvas.width / canvas.height, 0.1, 100.0, pMatrix );
+      m.multiply( pMatrix, vMatrix, tmpMatrix );
+
+      let count = 0;
+
+      ( function() {
+        gl.clearColor( 0.0, 0.0, 0.0, 1.0 );
+        gl.clearDepth( 1.0 );
+        gl.clear( gl.COLOR_BUFFER_BIT || gl.DEPTH_BUFFER_BIT );
+
+        count ++;
+
+        let rad = ( count % 360 ) * Math.PI / 180;
+
+        // Y軸を基準に回転する
+        m.initialize( mMatrix );
+        m.rotate( mMatrix, rad, [ 0.3, 0.5, 0.4 ], mMatrix );
+        m.multiply( tmpMatrix, mMatrix, mvpMatrix );
+        gl.uniformMatrix4fv( uniLocation, false, mvpMatrix );
+
+        gl.drawElements( gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0 );
+
+        gl.flush();
+
+        setTimeout( arguments.callee, 1000 / 30 );
+
+      } )();
+    };
+
+    function set_attribute( vbo, attL, attS ) {
+      for ( let i in vbo ) {
+        gl.bindBuffer( gl.ARRAY_BUFFER, vbo[ i ] );
+        gl.enableVertexAttribArray( attL[ i ] );
+        gl.vertexAttribPointer( attL[ i ], attS[ i ], gl.FLOAT, false, 0, 0 );
+      }
+    };
+
+    // create WebGLProgram object
+    function create_program( vs, fs ) {
+      let program = gl.createProgram();
+      gl.attachShader( program, vs );
+      gl.attachShader( program, fs );
+
+      gl.linkProgram( program );
+
+      if ( gl.getProgramParameter( program, gl.LINK_STATUS ) ) {
+        gl.useProgram( program );
+        return program;
+      } else {
+        alert( gl.getProgramInfoLog( program ) );
+        console.log( gl.getProgramInfoLog( program ) );
+      }
+    };
+
+    // create WebGLShader object
+    function create_shader( id ) {
+      let shader;
+      let scriptElement = document.getElementById( id );
+      if ( !scriptElement ) { return };
+      switch ( scriptElement.type ) {
+        case 'x-shader/x-vertex':
+          shader = gl.createShader( gl.VERTEX_SHADER );
+          break;
+        case 'x-shader/x-fragment':
+          shader = gl.createShader( gl.FRAGMENT_SHADER );
+          break;
+        default:
+          return;
+      };
+
+      gl.shaderSource( shader, scriptElement.text );
+      gl.compileShader( shader );
+      if ( gl.getShaderParameter( shader, gl.COMPILE_STATUS ) ) {
+        return shader;
+      } else {
+        alert( gl.getShaderInfoLog( shader ) );
+      }
+    };
+
+    // create WebGLBuffer for vertex
+    function create_vbo( data ) {
+      let vbo = gl.createBuffer();
+
+      gl.bindBuffer( gl.ARRAY_BUFFER, vbo );
+      gl.bufferData( gl.ARRAY_BUFFER, new Float32Array( data ), gl.STATIC_DRAW );
+      gl.bindBuffer( gl.ARRAY_BUFFER, null );
+      return vbo;
+    }
+
+    // create WebGLBuffer for index
+    function create_ibo( data ) {
+      let ibo = gl.createBuffer();
+
+      gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, ibo );
+      gl.bufferData( gl.ELEMENT_ARRAY_BUFFER, new Int16Array( data ), gl.STATIC_DRAW );
+      gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, null );
+      return ibo;
+    }
+
+    </script>
+  </body>
+</html>

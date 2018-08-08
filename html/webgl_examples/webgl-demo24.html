@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>webgl-demo24</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/libs/minMatrixb.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+  </head>
+  <style media="screen">
+    #pane {
+      margin: auto;
+      max-width: 500px;
+    }
+    #canvas {
+      display: block;
+      margin: 10px auto;
+    }
+  </style>
+  <body>
+    <div id="pane">
+      <canvas id="canvas"></canvas>
+      <p><input id="point_size" type="range" name="pointSize" value="30" min="0" max="1000"> point size (1 to 10 pixels)</p>
+      <p><input id="lines" type="radio" name="line"> gl.LINES</p>
+      <p><input id="line_strip" type="radio" name="line"> gl.LINE_STRIP</p>
+      <p><input id="line_loop" type="radio" name="line" checked> gl.LINE_LOOP</p>
+    </div>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec4 color;
+    uniform mat4 mvpMatrix;
+    uniform float pointSize;
+    varying vec4 vColor;
+
+    void main() {
+      vColor = color;
+      gl_Position = mvpMatrix * vec4( position, 1.0 );
+      gl_PointSize = pointSize;
+    }
+    </script>
+
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform sampler2D texture;
+    uniform int useTexture;
+    varying vec4 vColor;
+
+    void main() {
+      vec4 smpColor = vec4( 1.0 );
+      if ( bool( useTexture ) ) {
+        smpColor = texture2D( texture, gl_PointCoord );
+      }
+      if ( smpColor.a == 0.0 ) {
+        discard;
+      } else {
+        gl_FragColor = vColor * smpColor;
+      }
+    }
+    </script>
+
+    <script type="text/javascript">
+    var canvas;
+    var q = new qtnIV();
+    var qt = q.identity( q.create() );
+
+    function mouseMove( e ) {
+      var cw = canvas.width;
+      var ch = canvas.height;
+      var wh = 1 / Math.sqrt( cw * cw + ch * ch );
+      var x = e.clientX - canvas.offsetLeft - cw * 0.5;
+      var y = e.clientY - canvas.offsetTop - cw * 0.5;
+      var sq = Math.sqrt( x * x + y * y );
+      var r = sq * 2.0 * Math.PI * wh;
+      if ( sq != 1 ) {
+        sq = 1 / sq;
+        x *= sq;
+        y *= sq;
+      };
+      q.rotate( r, [ y, x, 0.0 ], qt );
+    };
+
+    ///////////////////////////////////////////////
+    let capturer = new CCapture( {
+      verbose: true,
+      display: true,
+      framerate: 60,
+      motionBlurFrames: 0,
+      format: 'gif',
+      workersPath: '../../js/libs/',
+      timeLimit: 6.28
+    } );
+
+    function CCaptureButtons() {
+      window.addEventListener( 'load', function ( e ) {
+        e.preventDefault();
+        capturer.start();
+      }, false );
+    };
+
+    // CCaptureButtons();
+    ///////////////////////////////////////////////
+
+    window.onload = function() {
+      canvas = document.getElementById( "canvas" );
+      canvas.width = 500; canvas.height = 500;
+
+      canvas.addEventListener( "mousedown", function( e ){
+        canvas.addEventListener( "mousemove", mouseMove, true );
+      }, true );
+      canvas.addEventListener( "mouseup", function( e ){
+        canvas.removeEventListener( "mousemove", mouseMove, true );
+      }, true );
+
+
+      var point_size = document.getElementById( "point_size" );
+      var lines = document.getElementById( "lines" );
+      var line_strip = document.getElementById( "line_strip" );
+      var line_loop = document.getElementById( "line_loop" );
+
+
+      var gl = canvas.getContext( "webgl" ) || canvas.getContext( "experimental-webgl" );
+      var prg = create_program( create_shader( "vs" ), create_shader( "fs" ) );
+
+      // pointSizeの範囲をconsole.logに出力
+      var pointSizeRange = gl.getParameter( gl.ALIASED_POINT_SIZE_RANGE );
+      console.log( 'pointSizeRange: ' + pointSizeRange[ 0 ] + ' to ' + pointSizeRange[ 1 ] );
+
+      var attLocation = [];
+      attLocation[ 0 ] = gl.getAttribLocation( prg, "position" );
+      attLocation[ 1 ] = gl.getAttribLocation( prg, "color" );
+
+      var attStride = [];
+      attStride[ 0 ] = 3;
+      attStride[ 1 ] = 4;
+
+      // 点のVBO生成
+      var pointSphere = sphere( 16, 16, 2.0 );
+      var pPosition = create_vbo( pointSphere.p );
+      var pColor = create_vbo( pointSphere.c );
+      var pVBOList = [ pPosition, pColor ];
+
+      // 頂点の位置
+      var position = [
+        -1.0, -1.0,  0.0,
+         0.0, -1.5,  0.0,
+         1.0, -1.0,  0.0,
+         1.5,  0.0,  0.0,
+         1.0,  1.0,  0.0,
+         0.0,  1.5,  0.0,
+        -1.0,  1.0,  0.0,
+        -1.5,  0.0,  0.0
+      ];
+
+      // 頂点色
+      var color = [
+        1.0, 1.0, 1.0, 1.0,
+        1.0, 0.0, 0.0, 1.0,
+        0.0, 1.0, 0.0, 1.0,
+        0.0, 0.0, 1.0, 1.0,
+        1.0, 1.0, 1.0, 1.0,
+        1.0, 0.0, 0.0, 1.0,
+        0.0, 1.0, 0.0, 1.0,
+        0.0, 0.0, 1.0, 1.0
+      ];
+
+      var lPosition = create_vbo( position );
+      var lColor = create_vbo( color );
+      var lVBOList = [ lPosition, lColor ];
+
+      var uniLocation = [];
+      uniLocation[ 0 ] = gl.getUniformLocation( prg, "mvpMatrix" );
+      uniLocation[ 1 ] = gl.getUniformLocation( prg, "pointSize" );
+      uniLocation[ 2 ] = gl.getUniformLocation( prg, "texture" );
+      uniLocation[ 3 ] = gl.getUniformLocation( prg, "useTexture" );
+
+      var m = new matIV();
+      var mMatrix = m.identity( m.create() );
+      var vMatrix = m.identity( m.create() );
+      var pMatrix = m.identity( m.create() );
+      var tmpMatrix = m.identity( m.create() );
+      var mvpMatrix = m.identity( m.create() );
+      var qMatrix = m.identity( m.create() );
+
+      gl.enable( gl.DEPTH_TEST );
+      gl.depthFunc( gl.LEQUAL );
+      gl.enable( gl.BLEND );
+
+      gl.blendFuncSeparate( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE );
+
+      var count = 0;
+
+      var texture0 = null;
+      create_texture( "atama_warui_hito.png", 0 );
+
+      (function() {
+        gl.clearColor( 0.0, 0.0, 0.0, 1.0 );
+        gl.clearDepth( 1.0 );
+        gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT );
+
+        count ++;
+        var rad = ( count % 360 ) * Math.PI / 180;
+
+        // クォータニオンを行列に適用
+        var qMatrix = m.identity( m.create() );
+        q.toMatIV( qt, qMatrix );
+
+        var camPosition = [ 0.0, 5.0, 5.0 ];
+        m.lookAt( camPosition, [ 0.0, 0.0, 0.0 ], [ 0, 1, 0 ], vMatrix );
+        m.multiply( vMatrix, qMatrix, vMatrix );
+        m.perspective( 45, canvas.width / canvas.height, 0.1, 100, pMatrix );
+        m.multiply( pMatrix, vMatrix, tmpMatrix );
+
+
+        // 点を描画
+        var pointSize = point_size.value / 10;
+
+        gl.activeTexture( gl.TEXTURE0 );
+        gl.bindTexture( gl.TEXTURE_2D, texture0 );
+
+        set_attribute( pVBOList, attLocation, attStride );
+        m.identity( mMatrix );
+        m.rotate( mMatrix, rad, [ 0.0, 1.0, 0.0 ], mMatrix );
+        m.multiply( tmpMatrix, mMatrix, mvpMatrix );
+        gl.uniformMatrix4fv( uniLocation[ 0 ], false, mvpMatrix );
+        gl.uniform1f( uniLocation[ 1 ], pointSize );
+        gl.uniform1i( uniLocation[ 2 ], 0 );
+        gl.uniform1i( uniLocation[ 3 ], true );
+        gl.drawArrays( gl.POINTS, 0, pointSphere.p.length / 3 );
+
+        // 線を描画
+        var lineOption = 0;
+        if( lines.checked ){ lineOption = gl.LINES };
+        if( line_strip.checked ){ lineOption = gl.LINE_STRIP };
+        if( line_loop.checked ){ lineOption = gl.LINE_LOOP };
+
+        set_attribute( lVBOList, attLocation, attStride );
+        m.identity( mMatrix );
+        m.rotate( mMatrix, rad, [ 1.0, 0.0, 1.0 ], mMatrix );
+        m.scale( mMatrix, [ 2.0, 2.0, 2.0 ], mMatrix );
+        m.multiply( tmpMatrix, mMatrix, mvpMatrix );
+        gl.uniformMatrix4fv( uniLocation[ 0 ], false, mvpMatrix );
+        gl.drawArrays( lineOption, 0, position.length / 3 );
+
+        gl.flush();
+        capturer.capture( canvas );
+        setTimeout( arguments.callee, 1000 / 61 );
+      })();
+
+      // create WebGLShader object
+      function create_shader( id ) {
+        var shader;
+        var scriptElement = document.getElementById( id );
+        if ( !scriptElement ) { return };
+        switch ( scriptElement.type ) {
+          case 'x-shader/x-vertex':
+            shader = gl.createShader( gl.VERTEX_SHADER );
+            break;
+          case 'x-shader/x-fragment':
+            shader = gl.createShader( gl.FRAGMENT_SHADER );
+            break;
+          default:
+            return;
+        };
+
+        gl.shaderSource( shader, scriptElement.text );
+        gl.compileShader( shader );
+        if ( gl.getShaderParameter( shader, gl.COMPILE_STATUS ) ) {
+          return shader;
+        } else {
+          alert( gl.getShaderInfoLog( shader ) );
+        }
+      };
+
+      // create WebGLProgram object
+      function create_program( vs, fs ) {
+        var program = gl.createProgram();
+        gl.attachShader( program, vs );
+        gl.attachShader( program, fs );
+
+        gl.linkProgram( program );
+
+        if ( gl.getProgramParameter( program, gl.LINK_STATUS ) ) {
+          gl.useProgram( program );
+          return program;
+        } else {
+          alert( gl.getProgramInfoLog( program ) );
+          console.log( gl.getProgramInfoLog( program ) );
+        }
+      };
+
+
+      // create WebGLBuffer for vertex
+      function create_vbo( data ) {
+        var vbo = gl.createBuffer();
+
+        gl.bindBuffer( gl.ARRAY_BUFFER, vbo );
+        gl.bufferData( gl.ARRAY_BUFFER, new Float32Array( data ), gl.STATIC_DRAW );
+        gl.bindBuffer( gl.ARRAY_BUFFER, null );
+        return vbo;
+      };
+
+      function set_attribute( vbo, attL, attS ) {
+        for ( var i in vbo ) {
+          gl.bindBuffer( gl.ARRAY_BUFFER, vbo[ i ] );
+          gl.enableVertexAttribArray( attL[ i ] );
+          gl.vertexAttribPointer( attL[ i ], attS[ i ], gl.FLOAT, false, 0, 0 );
+        }
+      };
+
+      // create WebGLBuffer for index
+      function create_ibo( data ) {
+        var ibo = gl.createBuffer();
+
+        gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, ibo );
+        gl.bufferData( gl.ELEMENT_ARRAY_BUFFER, new Int16Array( data ), gl.STATIC_DRAW );
+        gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, null );
+        return ibo;
+      };
+
+      function create_texture( source, number ) {
+        // イメージオブジェクトの生成
+        var img = new Image();
+
+        // データのオンロードをトリガーにする
+        img.onload = function() {
+          // テクスチャオブジェクトの生成
+          var tex = gl.createTexture();
+
+          // テクスチャをバインドする
+          gl.bindTexture( gl.TEXTURE_2D, tex );
+
+          // テクスチャへイメージを適用
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+          // ミップマップを生成
+          gl.generateMipmap( gl.TEXTURE_2D );
+
+          // テクスチャのバインドを無効化
+          gl.bindTexture( gl.TEXTURE_2D, null );
+
+          // 生成したテクスチャをグローバル変数に代入
+          switch( number ) {
+            case 0:
+              texture0 = tex;
+              break;
+            case 1:
+              texture1 = tex;
+              break;
+            default:
+              break;
+          };
+        };
+
+        // イメージオブジェクトのソースを指定
+        img.src = source;
+      };
+    };
+    // CCaptureButtons();
+
+    </script>
+  </body>
+</html>

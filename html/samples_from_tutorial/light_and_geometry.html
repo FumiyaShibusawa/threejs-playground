@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>light and geometry</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+  <link rel="stylesheet" media="all" href="../../css/style.css">
+</head>
+<body>
+  <a class="back-to-top" href="../index.html">back to top</a>
+  <div class="btn-cont">
+    <p class="perspective"><button id="change-light" onclick="changeLightDirection()">Change Light Direction</button></p>
+    <p class="perspective"><button id="change-geometry" onclick="changeGeometry()">Change Geometry</button></p>
+  </div>
+  <script src="../../js/three.js"></script>
+  <script type="text/javascript">
+    // "use strict";
+    // 箱作り
+    // scene ... 描画する範囲全体を定義
+    var scene = new THREE.Scene();
+    // camera ... sceneのうち映す範囲を定義
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); // [fov, aspectratio, near, far]
+    // renderer ... cameraに映っている範囲でオブジェクトを表示する処理を定義
+    var renderer = new THREE.WebGLRenderer( { alpha:true } );
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // オブジェクト作り
+    // geometry ... 表示する物質の形状を定義（立方体、正20面体、球体など）
+    var geometry = new THREE.OctahedronGeometry(20);
+    // color ... 色を定義（hex, rgb, hsl）
+    var color = new THREE.Color("#7833aa");
+    // material ... geometryの色、質感などを定義
+    // var material = new THREE.MeshLambertMaterial({color: color.getHex()});
+    var material = new THREE.MeshPhongMaterial({color: color.getHex(), specular: 0x009900, shininess: 50});
+    // mesh ... geometryとmaterialを合成して実際に物質に定義
+    var mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+
+    camera.position.z = 100;
+
+    // light ... geometryに当てる光源、影の演出を定義
+    var light = new THREE.DirectionalLight(0xffffff, 1.5);
+    light.position.set(0, 10, 0);
+    scene.add(light);
+
+    // animation ... loop文で規則的な運動などを定義
+    var render = function() {
+      requestAnimationFrame(render);
+      mesh.rotation.x += 0.01;
+      mesh.rotation.y += 0.01;
+      renderer.render(scene, camera);
+    }
+
+    render();
+
+    let dodeca, icosa, octa, tetra, arr;
+    dodeca = new THREE.DodecahedronGeometry(20);
+    icosa = new THREE.IcosahedronGeometry(20);
+    octa = new THREE.OctahedronGeometry(20);
+    tetra = new THREE.TetrahedronGeometry(20);
+
+    let changeGeometry = function() {
+      arr = [dodeca, icosa, octa, tetra];
+      var next_geometry = arr[Math.round(Math.random() * 3)];
+      if (next_geometry == mesh.geometry) {
+        arr.splice(arr.indexOf(next_geometry), 1);
+        mesh.geometry = arr[Math.round(Math.random() * 2)];
+      } else {
+        mesh.geometry = next_geometry;
+      }
+      var div = document.createElement("div");
+      div.classList.add("geometry-status");
+      div.innerHTML = mesh.geometry.type;
+      if (e_change_geometry.parentNode.childElementCount > 1) {
+        e_change_geometry.parentNode.removeChild(  e_change_geometry.parentNode.childNodes[1]);
+        e_change_geometry.parentNode.appendChild(div);
+      } else {
+        e_change_geometry.parentNode.appendChild(div);
+      }
+    };
+
+    var j = 0;
+    let changeLightDirection = function() {
+      crd = [0, 0, 0];
+      crd[j] = 10;
+      light.position.set(crd[0], crd[1], crd[2]);
+      if (j == 2) {
+        j = 0;
+      } else {
+        j += 1;
+      }
+      var div = document.createElement("div");
+      div.classList.add("light-status");
+      div.innerHTML = "position  " + "x:" + light.position.x + " y:" + light.position.y + " z:" + light.position.z;
+      if (e_change_light.parentNode.childElementCount > 1) {
+        e_change_light.parentNode.removeChild(  e_change_light.parentNode.childNodes[1]);
+        e_change_light.parentNode.appendChild(div);
+      } else {
+        e_change_light.parentNode.appendChild(div);
+      }
+    };
+
+    let activate = function(e) {
+      e.classList.add("btn-success-3d");
+      setTimeout(function(){e.classList.remove("btn-success-3d");}, 1200);
+    }
+    let e_change_light = document.getElementById("change-light");
+    let e_change_geometry = document.getElementById("change-geometry");
+    e_change_light.addEventListener("click", function(){activate(e_change_light)}, false);
+    e_change_geometry.addEventListener("click", function(){activate(e_change_geometry)}, false);
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>drawing a line | threejs</title>
+    <link rel="stylesheet" media="all" href="../../css/style.css">
+  </head>
+  <body>
+    <p class="description">スライムの輪郭</p>
+    <a class="back-to-top" href="../index.html">back to top</a>
+    <script src="../../js/three.js"></script>
+    <script>
+      // 箱の生成
+      var renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // カメラの生成
+      var camera  = new THREE.PerspectiveCamera(30, window.innerWidth / innerHeight, 1, 500);
+      camera.position.set(0, 0, 100);
+      camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+      // シーン
+      var scene = new THREE.Scene();
+
+      // var material = new THREE.LineBasicMaterial({ color: 0x0000ff });
+      var material = new THREE.LineBasicMaterial({ color: 0x1E8DCC });
+
+      var geometry = new THREE.Geometry();
+      geometry.vertices.push(new THREE.Vector3(3, -2.5, 0));
+      geometry.vertices.push(new THREE.Vector3(-3, -2.5, 0));
+      geometry.vertices.push(new THREE.Vector3(-5, -1.5, 0));
+      geometry.vertices.push(new THREE.Vector3(-5, 1.5, 0));
+      geometry.vertices.push(new THREE.Vector3(-3, 2.5, 0));
+      geometry.vertices.push(new THREE.Vector3(-2, 3.5, 0));
+      geometry.vertices.push(new THREE.Vector3(-1, 5.5, 0));
+      geometry.vertices.push(new THREE.Vector3(1, 5.5, 0));
+      geometry.vertices.push(new THREE.Vector3(2, 3.5, 0));
+      geometry.vertices.push(new THREE.Vector3(3, 2.5, 0));
+      geometry.vertices.push(new THREE.Vector3(5, 1.5, 0));
+      geometry.vertices.push(new THREE.Vector3(5, -1.5, 0));
+      geometry.vertices.push(new THREE.Vector3(3, -2.5, 0));
+
+      var line = new THREE.Line(geometry, material);
+      scene.add(line);
+      renderer.render(scene, camera);
+    </script>
+  </body>
+</html>

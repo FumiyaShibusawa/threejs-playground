@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>glsl-demo18</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <style>
+      * {
+        text-align: center;
+        margin: 10px auto;
+        padding: 0;
+      }
+      canvas {
+        box-shadow: 0 0 0 1px gray;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="../index.html" class="back-to-top">back to top</a>
+    <canvas id="canvas"></canvas>
+    <p><input type="checkbox" id="check" checked><label for="check"> auto run</label></p>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform float time;
+    uniform vec2 mouse;
+    uniform vec2 r;
+
+    const vec3 cPos = vec3( 0.0, 5.0, 5.0 );
+    const vec3 cDir = normalize(vec3( 0.0, - 1.0, - 1.0 ));
+    const vec3 cUp = normalize(vec3( 0.0, 1.0, - 1.0 ));
+    const vec3 lightDir = normalize( vec3( 0.0, 1.0, -2.0 ) );
+
+    // rorate
+    vec3 rotate( vec3 p, float angle, vec3 axis ) {
+      vec3 a = normalize( axis );
+      float s = sin( angle );
+      float c = cos( angle );
+      float r = 1.0 - c;
+      mat3 m = mat3(
+        a.x * a.x * r + c,
+        a.y * a.x * r + a.z * s,
+        a.z * a.x * r - a.y * s,
+        a.x * a.y * r - a.z * s,
+        a.y * a.y * r + c,
+        a.z * a.y * r + a.x * s,
+        a.x * a.z * r + a.y * s,
+        a.y * a.z * r - a.x * s,
+        a.z * a.z * r + c
+      );
+      return m * p;
+    }
+
+    // twist x-aixs wise
+    vec3 twistX( vec3 p, float power ) {
+      float s = sin( power * p.x );
+      float c = cos( power * p.x );
+      mat3 m = mat3(
+        1.0, 0.0, 0.0,
+        0.0,   c,   s,
+        0.0,  -s,   c
+      );
+      return m * p;
+    }
+
+    // twist y-aixs wise
+    vec3 twistY( vec3 p, float power ) {
+      float s = sin( power * p.y );
+      float c = cos( power * p.y );
+      mat3 m = mat3(
+          c, 0.0,  -s,
+        0.0, 1.0, 0.0,
+          s, 0.0,   c
+      );
+      return m * p;
+    }
+
+    // twist z-aixs wise
+    vec3 twistZ( vec3 p, float power ) {
+      float s = sin( power * p.z );
+      float c = cos( power * p.z );
+      mat3 m = mat3(
+          c,   s, 0.0,
+          s,  -c, 0.0,
+        0.0, 0.0, 1.0
+      );
+      return m * p;
+    }
+
+    // smoothing min
+    float smoothMin( float d1, float d2, float d3, float k ) {
+      float h = exp( -k * d1 ) + exp( -k * d2 ) + exp( -k * d3 );
+      return -log( h ) / k;
+    }
+
+    // sphere
+    float distFuncSphere( vec3 p, float sphereSize) {
+      return length( p ) - sphereSize;
+    }
+
+    // torus
+    float distFuncTorus( vec3 p, vec2 r ) {
+      p.xz -= mouse * 20.0 - 10.0;
+      vec2 d = vec2( length( p.xz ) - r.x, p.y );
+      return length( d ) - r.y;
+    }
+
+    // floor
+    float distFuncFloor( vec3 p ) {
+      return dot( p, vec3( 0.0, 1.0, 0.0 ) ) + 1.0;
+    }
+
+    // box
+    float distFuncBox( vec3 p ) {
+      return length( max( abs( p ) - vec3( 2.0, 0.1, 0.5 ), 0.0 ) ) - 0.1;
+    }
+
+    // cylinder
+    float distFuncCylinder( vec3 p, vec2 r ) {
+      vec2 d = abs( vec2( length( p.xy ), p.z ) ) - r;
+      return min( max( d.x, d.y ), 0.0 ) + length( max( d, 0.0 ) ) - 0.1;
+    }
+
+    // distance function
+    float distFunc( vec3 p ) {
+      float d1 = distFuncTorus( p, vec2( 3.0, 1.0 ) );
+      float d2 = distFuncFloor( p );
+      return min( d1, d2 );
+    }
+
+    vec3 getNormal( vec3 p ) {
+      float d = 0.001;
+      return normalize( vec3(
+        distFunc( vec3( p.x + d, p.y, p.z ) ) - distFunc( vec3( p.x - d, p.y, p.z ) ),
+        distFunc( vec3( p.x, p.y + d, p.z ) ) - distFunc( vec3( p.x, p.y - d, p.z ) ),
+        distFunc( vec3( p.x, p.y, p.z + d ) ) - distFunc( vec3( p.x, p.y, p.z - d ) )
+      ) );
+    }
+
+    float genShadow( vec3 ro, vec3 rd ) {
+      float h = 0.0;
+      float c = 0.001;
+      float r = 1.0;
+      float shadowCoef = 0.5;
+      for ( float i = 0.0; i < 50.0; i ++ ) {
+        h = distFunc( ro + rd * c );
+        if ( h < 0.001 ) {
+          return shadowCoef;
+        }
+        r = min( r, h * 16.0 / c );
+        c += h;
+      }
+      return 1.0 - shadowCoef + r * shadowCoef;
+    }
+
+    void main() {
+      vec2 p = ( gl_FragCoord.xy * 2.0 - r ) / min( r.x, r.y );
+
+      // camera and ray
+      vec3 cSide = cross( cDir, cUp );
+      float targetDepth = 1.0;
+      vec3 ray = normalize( cSide * p.x + cUp * p.y + cDir * targetDepth );
+
+      // marching loop
+      float tmp = 0.0, dist;
+      vec3 dPos = cPos;
+      for ( int i = 0; i < 192; i ++ ) {
+        dist = distFunc( dPos );
+        if ( dist < 0.0001 ) { break; };
+        tmp += dist;
+        dPos = cPos + tmp * ray * 0.75;
+      }
+
+      // light offset
+      vec3 light = normalize( lightDir + vec3( sin(time), 0.0, 0.0 ) );
+
+      // hit check
+      vec3 color;
+      float shadow = 1.0;
+      if ( abs( dist ) < 0.0001 ) {
+        vec3 normal = getNormal( dPos );
+
+        // light
+        vec3 halfLE = normalize( light - ray );
+        float diff = clamp( dot( lightDir, normal ), 0.1, 1.0 );
+        float spec = pow( clamp( dot( halfLE, normal ), 0.0, 1.0 ), 50.0 );
+
+        // shadow
+        shadow = genShadow( dPos + normal * 0.001, light );
+
+        // generate tile pattern
+        float u = 1.0 - floor( mod( dPos.x, 2.0 ) );
+        float v = 1.0 - floor( mod( dPos.z, 2.0 ) );
+        if ( ( u == 1.0 && v < 1.0 ) || ( u < 1.0 && v == 1.0 ) ) {
+          diff *= 0.7;
+        }
+        color = vec3( diff ) + vec3( spec );
+      } else {
+        color = vec3( 0.0 );
+      }
+      gl_FragColor = vec4( color * max( 0.5, shadow ), 1.0 );
+    }
+
+    </script>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+
+    void main() {
+      gl_Position = vec4( position, 1.0 );
+    }
+    </script>
+    <script type="text/javascript">
+    let canvas, cw, ch, mouseX, mouseY, gl, webgl_program, is_run, el_check,
+    startTime, time = tmpTime = 0.0, fps = 1000 / 61, uniLocation = [];
+
+
+    window.onload = function() {
+      canvas = document.getElementById( 'canvas' );
+      cw = ch = 512;
+      canvas.width = cw;
+      canvas.height = ch;
+      el_check = document.getElementById( 'check' );
+      el_check.addEventListener( 'change', checkChange, true );
+      canvas.addEventListener( 'mousedown', function() {
+        canvas.addEventListener( 'mousemove', mouseMove, true );
+      }, true );
+      canvas.addEventListener( 'mouseup', function() {
+        canvas.removeEventListener( 'mousemove', mouseMove, true );
+      }, true );
+      initWebGL();
+    };
+
+    function checkChange( e ) {
+      is_run = e.currentTarget.checked;
+      if ( is_run ) {
+        startTime = performance.now();
+        render();
+      } else {
+        tmpTime += time;
+      }
+    };
+
+    function mouseMove( e ) {
+      mouseX = e.offsetX / cw;
+      mouseY = e.offsetY / ch;
+    };
+
+    function initWebGL() {
+      gl = canvas.getContext( 'webgl' ) || canvas.getContext( 'experimental-webgl' );
+      webgl_program = create_program( create_shader( 'vs' ), create_shader( 'fs' ) );
+      is_run = ( webgl_program != null );
+      if ( !is_run ) { el_check.checked = false };
+
+      uniLocation[ 0 ] = gl.getUniformLocation( webgl_program, 'time' );
+      uniLocation[ 1 ] = gl.getUniformLocation( webgl_program, 'mouse' );
+      uniLocation[ 2 ] = gl.getUniformLocation( webgl_program, 'r' );
+
+      let position = [
+        -1.0,  1.0, 0.0,
+         1.0,  1.0, 0.0,
+        -1.0, -1.0, 0.0,
+         1.0, -1.0, 0.0
+      ];
+
+      let index = [
+        0, 2, 1,
+        1, 2, 3
+      ];
+
+      let vPosition = create_vbo( position );
+      let vIndex = create_ibo( index );
+      let vAttribLocation = gl.getAttribLocation( webgl_program, 'position' );
+
+      gl.bindBuffer( gl.ARRAY_BUFFER, vPosition );
+      gl.enableVertexAttribArray( vAttribLocation );
+      gl.vertexAttribPointer( vAttribLocation, 3, gl.FLOAT, false, 0, 0 );
+
+      gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, vIndex );
+
+      gl.clearColor( 0.0, 0.0, 0.0, 1.0 );
+      mouseX = mouseY = 0.5;
+
+      startTime = performance.now();
+
+      render();
+
+    };
+
+    ///////////////////////////////////////////////
+    let capturer = new CCapture( {
+      verbose: true,
+      display: true,
+      framerate: 60,
+      motionBlurFrames: 0,
+      format: 'gif',
+      workersPath: '../../js/libs/',
+      timeLimit: 6.28
+    } );
+
+    function CCaptureButtons() {
+      window.addEventListener( 'load', function ( e ) {
+        e.preventDefault();
+        capturer.start();
+      }, false );
+    };
+
+    // CCaptureButtons();
+    ///////////////////////////////////////////////
+
+    function render() {
+      if ( !is_run ) { return };
+      time = ( performance.now() + startTime ) * 0.001;
+      gl.clear( gl.COLOR_BUFFER_BIT );
+
+      gl.uniform1f( uniLocation[ 0 ], time + tmpTime );
+      gl.uniform2fv( uniLocation[ 1 ], [ mouseX, mouseY ] );
+      gl.uniform2fv( uniLocation[ 2 ], [ cw, ch ] );
+      gl.drawElements( gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0 );
+      gl.flush();
+      setTimeout( render, fps );
+      capturer.capture( canvas );
+    };
+
+
+
+    function create_shader( id ) {
+      let shader;
+      let scriptElement = document.getElementById( id );
+      if ( !scriptElement ) { return };
+
+      switch ( scriptElement.type ) {
+        case 'x-shader/x-vertex':
+          shader = gl.createShader( gl.VERTEX_SHADER );
+          break;
+        case 'x-shader/x-fragment':
+          shader = gl.createShader( gl.FRAGMENT_SHADER );
+          break;
+        default:
+          return;
+      };
+
+      gl.shaderSource( shader, scriptElement.text );
+      gl.compileShader( shader );
+
+      if ( gl.getShaderParameter( shader, gl.COMPILE_STATUS ) ) {
+        return shader;
+      } else {
+        alert( gl.getShaderInfoLog( shader ) );
+        console.log( gl.getShaderInfoLog( shader ) );
+      }
+    };
+
+    function create_program( vs, fs ) {
+      program = gl.createProgram();
+      gl.attachShader( program, vs );
+      gl.attachShader( program, fs );
+
+      gl.linkProgram( program );
+
+      if ( gl.getProgramParameter( program, gl.LINK_STATUS ) ) {
+        gl.useProgram( program );
+        return program;
+      } else {
+        return null;
+      }
+    };
+
+    function create_vbo( data ) {
+      let vbo = gl.createBuffer();
+
+      gl.bindBuffer( gl.ARRAY_BUFFER, vbo );
+      gl.bufferData( gl.ARRAY_BUFFER, new Float32Array( data ), gl.STATIC_DRAW );
+      gl.bindBuffer( gl.ARRAY_BUFFER, null );
+      return vbo;
+    };
+
+    function create_ibo( data ) {
+      let ibo = gl.createBuffer();
+
+      gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, ibo );
+      gl.bufferData( gl.ELEMENT_ARRAY_BUFFER, new Int16Array( data ), gl.STATIC_DRAW );
+      gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, null );
+      return ibo;
+    };
+
+
+    </script>
+  </body>
+</html>

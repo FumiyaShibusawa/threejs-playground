@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>glsl-demo10</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <style>
+      * {
+        text-align: center;
+        margin: 10px auto;
+        padding: 0;
+      }
+      canvas {
+        box-shadow: 0 0 0 1px gray;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="../index.html" class="back-to-top">back to top</a>
+    <canvas id="canvas"></canvas>
+    <p><input type="checkbox" id="check" checked><label for="check"> auto run</label></p>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform float time;
+    uniform vec2 mouse;
+    uniform vec2 resolution;
+
+
+    const float PI = 3.14159265;
+    const float angle = 75.0;
+    const float fov = angle * 0.5 * PI / 180.0;
+    float sphereSize = 1.0;
+    // vec3 lightDir = vec3( 0.0, 4.577, 4.577 );
+    vec3 lightDir = vec3( 0.0, abs(sin( time * 3.0 )) * 20.0, cos( time ) * 5.0 );
+
+    vec3 trans( vec3 p ) {
+      return mod( p, 10.0) - 5.0;
+    }
+
+    float distanceFunc( vec3 p, float l, float d ) {
+      vec3 q = abs( trans( p ) );
+      // return length( max( q - vec3( l, l, l ) , 0.0 ) ) - d;
+      return length( max( q - vec3( l, l, l ) , 0.0 ) ) - pow( abs( sin( time * 2.0 ) ), 80.0 ) * 0.1 - d;
+    }
+
+    vec3 getNormal( vec3 p, float l, float r ) {
+      float d = 0.001;
+      return normalize( vec3(
+        distanceFunc( p + vec3( d, 0, 0 ), l, r ) - distanceFunc( p + vec3( -d, 0, 0 ), l, r ),
+        distanceFunc( p + vec3( 0, d, 0 ), l, r ) - distanceFunc( p + vec3( 0, -d, 0 ), l, r ),
+        distanceFunc( p + vec3( 0, 0, d ), l, r ) - distanceFunc( p + vec3( 0, 0, -d ), l, r )
+      ) );
+    }
+
+    void main() {
+      vec2 p = ( gl_FragCoord.xy * 2.0 - resolution ) / min( resolution.x, resolution.y );
+
+      // camera
+      // vec3 cPos = vec3( 0.0, 0.0, mod( time * 5.0, 395.0 ) );
+      vec3 cPos = vec3( cos(time * 0.3) * 80.0, sin(time * 0.1) * 60.0, pow( mod( cos( time * 0.4 ), 1.3 ), 10.0 ) * 50.0 );
+
+      // ray
+      vec3 ray = normalize( vec3( sin( fov ) * p.x, sin( fov ) * p.y, - cos( fov ) ) );
+
+      // object radius
+      float l = clamp(abs( cos( time ) ) * 2.0, 0.5, 2.0);
+      // float l = 0.5;
+      float r = clamp(abs( cos( time ) ), 0.0, 0.0);
+
+      // 球体と立方体が一定の時間で入れ替わる処理を作りたかったけど上手くできなかった。
+      // if ( sin( time * 4.0 ) > 0.0 && sin( time * 4.0 ) <= 1.0 ) {
+      //   l = clamp( , 0.5 );
+      //   r = 0.01;
+      // } else if ( sin( time * 4.0 ) <= 0.0 && sin( time * 4.0 ) >= - 1.0 ) {
+      //   l = 0.01;
+      //   r = 0.5;
+      // }
+
+
+      // marching loop
+      float distance = 0.0;
+      float rLen = 0.0;
+      vec3 rPos = cPos;
+      for ( float i = 0.0; i < 56.0; i ++ ) {
+        distance = distanceFunc( rPos, l, r );
+        rLen += distance;
+        rPos = cPos + ray * rLen;
+      }
+
+      // hit check
+      vec3 normal = getNormal( rPos, l, r );
+      float diff = clamp( dot( lightDir, normal ), 0.2, 1.0 );
+      if ( abs( distance ) < 0.001 ) {
+        // gl_FragColor = vec4( vec3( diff ), 1.0 );
+        gl_FragColor = vec4( diff, diff, diff, 1.0 );
+      } else {
+        gl_FragColor = vec4( vec3( 0.4 ), 1.0 );
+        // gl_FragColor = vec4( vec3( normal ), 1.0 );
+      }
+    }
+
+    </script>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+
+    void main() {
+      gl_Position = vec4( position, 1.0 );
+    }
+    </script>
+    <script type="text/javascript">
+      let c, cw, ch, mx, my, gl, run, eCheck;
+      let startTime;
+      let time = 0.0;
+      let tempTime = 0.0;
+      let fps = 1000 / 61;
+      let uniLocation = new Array();
+
+      let capturer = new CCapture( {
+        verbose: true,
+        display: true,
+        framerate: 60,
+        motionBlurFrames: 0,
+        format: 'gif',
+        workersPath: '../../js/libs/',
+        timeLimit: 15.70
+      } );
+
+      function CCaptureButtons() {
+
+        window.addEventListener( 'load', function ( e ) {
+          e.preventDefault();
+          capturer.start();
+        }, false );
+
+      };
+
+
+      // onload
+      window.onload = function() {
+        c = document.getElementById( 'canvas' );
+
+        cw = 512; ch = 512;
+        c.width = cw; c.height = ch;
+
+        eCheck = document.getElementById( 'check' );
+
+        c.addEventListener( 'mousemove', mouseMove, true );
+        eCheck.addEventListener( 'change', checkChange, true );
+
+        gl = c.getContext( 'webgl' ) || c.getContext( 'experimental-webgl' );
+
+        let prg = create_program( create_shader( 'vs' ), create_shader( 'fs' ) );
+        run = ( prg != null );
+        if ( !run ) { eCheck.checked = false; };
+        uniLocation[ 0 ] = gl.getUniformLocation( prg, 'time' );
+        uniLocation[ 1 ] = gl.getUniformLocation( prg, 'mouse' );
+        uniLocation[ 2 ] = gl.getUniformLocation( prg, 'resolution' );
+
+        // 頂点データ周りの初期化
+        let position = [
+          -1.0,  1.0, 0.0,
+           1.0,  1.0, 0.0,
+          -1.0, -1.0, 0.0,
+           1.0, -1.0, 0.0
+        ];
+        let index = [
+          0, 2, 1,
+          1, 2, 3
+        ];
+
+        let vPosition = create_vbo( position );
+        let vIndex = create_ibo( index );
+        let vAttLocation = gl.getAttribLocation( prg, 'position' );
+        gl.bindBuffer( gl.ARRAY_BUFFER, vPosition );
+        gl.enableVertexAttribArray( vAttLocation );
+        gl.vertexAttribPointer( vAttLocation, 3, gl.FLOAT, false, 0, 0 );
+        gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, vIndex );
+
+        gl.clearColor( 0.0, 0.0, 0.0, 1.0 );
+        mx = 0.5; my = 0.5;
+        startTime = new Date().getTime();
+
+        render();
+      };
+      // CCaptureButtons();
+
+
+      function checkChange( e ) {
+        run = e.currentTarget.checked;
+        if ( run ) {
+          startTime = new Date().getTime();
+          render();
+        } else {
+          tempTime += time;
+        }
+      };
+
+      function mouseMove( e ) {
+        mx = e.offsetX / cw;
+        my = e.offsetY / ch;
+      };
+
+
+      function render() {
+        if ( !run ) { return };
+
+        time = ( new Date().getTime() - startTime ) * 0.001;
+
+        gl.clear( gl.COLOR_BUFFER_BIT );
+
+        gl.uniform1f( uniLocation[ 0 ], time + tempTime );
+        gl.uniform2fv( uniLocation[ 1 ], [ mx, my ] );
+        gl.uniform2fv( uniLocation[ 2 ], [ cw, ch ] );
+
+        gl.drawElements( gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0 );
+        gl.flush();
+
+        setTimeout( render, fps );
+        capturer.capture( c );
+      };
+
+
+      function create_shader( id ) {
+        let shader;
+        let scriptElement = document.getElementById( id );
+
+        if ( !scriptElement ) { return; };
+
+        switch( scriptElement.type ) {
+          case 'x-shader/x-vertex' :
+            shader = gl.createShader( gl.VERTEX_SHADER );
+            break;
+          case 'x-shader/x-fragment' :
+            shader = gl.createShader( gl.FRAGMENT_SHADER );
+            break;
+          default :
+            return;
+        };
+
+        gl.shaderSource( shader, scriptElement.text );
+
+        gl.compileShader( shader );
+
+        if ( gl.getShaderParameter( shader, gl.COMPILE_STATUS ) ) {
+          return shader;
+        } else {
+          alert( gl.getShaderInfoLog( shader ) );
+          console.log( gl.getShaderInfoLog( shader ) );
+        }
+      };
+
+      function create_program( vs, fs ) {
+        let program = gl.createProgram();
+
+        gl.attachShader( program, vs );
+        gl.attachShader( program, fs );
+
+        gl.linkProgram( program );
+
+        if ( gl.getProgramParameter( program, gl.LINK_STATUS ) ) {
+          gl.useProgram( program );
+          return program;
+        } else {
+          return null;
+        }
+      };
+
+      function create_vbo( data ) {
+        let vbo = gl.createBuffer();
+
+        gl.bindBuffer( gl.ARRAY_BUFFER, vbo );
+        gl.bufferData( gl.ARRAY_BUFFER, new Float32Array( data ), gl.STATIC_DRAW );
+        gl.bindBuffer( gl.ARRAY_BUFFER, null );
+        return vbo;
+      };
+
+      function create_ibo( data ) {
+        let ibo = gl.createBuffer();
+
+        gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, ibo );
+        gl.bufferData( gl.ELEMENT_ARRAY_BUFFER, new Int16Array( data ), gl.STATIC_DRAW );
+        gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, null );
+        return ibo;
+      };
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>daily rendering 03</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="keywords" content="">
+    <link rel="stylesheet" href="../../css/style.css">
+  </head>
+  <body>
+    <script src="../../node_modules/three/build/three.min.js"></script>
+    <script src="../../js/libs/OrbitControls.js"></script>
+    <script id="vertexShader" type="x-shader/x-vertex">
+      attribute vec4 color;
+      varying vec4 vColor;
+      void main(){
+        vColor = color;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    </script>
+    <script id="fragmentShader" type="x-shader/x-fragment">
+      precision mediump float;
+      varying vec4 vColor;
+      void main(){
+        gl_FragColor = vec4(vColor.rgb, .5);
+      }
+    </script>
+    <script type="text/javascript">
+      var scene, camera, renderer, geometry, material, mesh;
+
+      // canvasシーンをセット
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(4.0, 4.0, 4.0);
+      camera.lookAt(new THREE.Vector3());
+      control = new THREE.OrbitControls(camera);
+      control.autoRotate = true;
+      renderer = new THREE.WebGLRenderer();
+      renderer.setClearColor(0x000000);
+      renderer.setPixelRatio(window.deviePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      window.addEventListener('resize', function(){
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }, false);
+
+
+      init();
+      animate();
+
+      // モデル作り
+      function init(){
+        geometry = new THREE.BufferGeometry();
+        let position = [
+          // 1枚目
+          -1.0, -1.0,  1.0,
+          -1.0,  1.0,  1.0,
+           1.0,  1.0,  1.0,
+
+           1.0,  1.0,  1.0,
+          -1.0, -1.0,  1.0,
+           1.0, -1.0,  1.0,
+
+           // 2枚目
+           1.0, -1.0,  1.0,
+           1.0,  1.0,  1.0,
+           1.0,  1.0, -1.0,
+
+           1.0,  1.0, -1.0,
+           1.0, -1.0,  1.0,
+           1.0, -1.0, -1.0,
+
+           // 3枚目
+           1.0, -1.0, -1.0,
+           1.0,  1.0, -1.0,
+          -1.0,  1.0, -1.0,
+
+          -1.0,  1.0, -1.0,
+           1.0, -1.0, -1.0,
+          -1.0, -1.0, -1.0,
+
+           // 4枚目
+          -1.0, -1.0, -1.0,
+          -1.0,  1.0, -1.0,
+          -1.0,  1.0,  1.0,
+
+          -1.0,  1.0,  1.0,
+          -1.0, -1.0, -1.0,
+          -1.0, -1.0,  1.0,
+
+           // 5枚目
+          -1.0, -1.0,  1.0,
+           1.0, -1.0,  1.0,
+          -1.0, -1.0, -1.0,
+
+          -1.0, -1.0, -1.0,
+           1.0, -1.0, -1.0,
+           1.0, -1.0,  1.0,
+
+           // 6枚目
+           1.0,  1.0,  1.0,
+          -1.0,  1.0,  1.0,
+          -1.0,  1.0, -1.0,
+
+          -1.0,  1.0, -1.0,
+           1.0,  1.0,  1.0,
+           1.0,  1.0, -1.0,
+        ];
+        let color = [
+          // 1枚目
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          // 2枚目
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          // 3枚目
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          // 4枚目
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          // 5枚目
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          // 6枚目
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+
+          1.0, 1.0, 1.0, 1.0,
+          1.0, 0.0, 1.0, 1.0,
+          1.0, 1.0, 1.0, 1.0,
+        ];
+        // for(let i = 0; i < 100; i++){
+        //
+        // }
+        let positionAttribute = new THREE.Float32BufferAttribute(position, 3);
+        let colorAttribute = new THREE.Float32BufferAttribute(color, 4);
+        colorAttribute.normalized = true;
+        geometry.addAttribute('position', positionAttribute);
+        geometry.addAttribute('color', colorAttribute);
+        let uniforms = {};
+        material = new THREE.ShaderMaterial({
+          uniforms: uniforms,
+          vertexShader: document.getElementById('vertexShader').textContent,
+          fragmentShader: document.getElementById('fragmentShader').textContent,
+          side: THREE.DoubleSide,
+          transparent: true
+        });
+        mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+      };
+
+      function animate(){
+        requestAnimationFrame(animate);
+        render();
+      };
+
+      function render(){
+        mesh.rotation.x += Math.PI / 360;
+        mesh.rotation.y += Math.PI / 360;
+        renderer.render(scene, camera);
+      };
+
+    </script>
+  </body>
+</html>

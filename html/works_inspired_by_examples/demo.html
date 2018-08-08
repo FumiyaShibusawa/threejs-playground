@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>Practice Playground</title>
+    <link rel="stylesheet" href="../../css/style.css">
+  </head>
+  <body>
+    <a href="../index.html" class="back-to-top">back to top</a>
+    <div class="btn-cont">
+      <button id="start" type="button">Start Recording</button>
+      <!-- <button id="stop" type="button">Stop Recording</button> -->
+    </div>
+    <script src="../../js/three.min.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+    <script type="text/javascript">
+      let scene, camera, renderer, geometry, cube, light,
+
+      windowHalfX = window.innerWidth / 2,
+      windowHalfY = window.innerHeight / 2,
+
+      targetRotation = 0,
+      targetRotationOnMouseDown = 0,
+
+      mouseX = 0,
+      mouseXOnMouseDown = 0;
+
+      // CCaptureの設定
+
+      let capturer = new CCapture( {
+        verbose: true,
+        display: true,
+        framerate: 30,
+        motionBlurFrames: 0,
+        format: 'gif',
+        workersPath: '../../js/libs/',
+        timeLimit: 1
+      } );
+
+      function CCaptureButtons() {
+
+        let start = document.getElementById( 'start' );
+
+        start.addEventListener( 'click', function ( e ) {
+
+          e.preventDefault();
+          start.style.backgroundColor = '#ddd';
+          capturer.start();
+
+        }, false );
+
+      };
+
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 2, 1000 );
+      camera.position.z = 15;
+
+      renderer = new THREE.WebGLRenderer( { antialias: true } );
+      renderer.setSize( window.innerWidth, window.innerHeight );
+      renderer.setPixelRatio( window.devicePixelRatio );
+      document.body.appendChild( renderer.domElement );
+
+      window.addEventListener( 'resize', onWindowResize, false );
+      window.addEventListener( 'mousedown', onWindowMouseDown, false );
+      // window.addEventListener('touchstart', onWindowTouchStart, false);
+      // window.addEventListener('touchmove', onWindowTouchMove, false);
+
+      function onWindowMouseDown( event ) {
+        event.preventDefault();
+
+        // mousedownと同時にmousemove、mouseup、mouseoutのイベントも付与する。
+        window.addEventListener( 'mousemove', onWindowMouseMove, false );
+        window.addEventListener( 'mouseup', onWindowMouseUp, false );
+        window.addEventListener( 'mouseout', onWindowMouseOut, false );
+
+        // 現在のマウスのx座標を取得して、中央からの距離を出す。
+        mouseXOnMouseDown = event.clientX - windowHalfX;
+        // targetRotationOnMouseDown = group.rotation.y; と同値
+        // mousedownした時点でのrotation.yの値を取得する
+        targetRotationOnMouseDown = targetRotation;
+      }
+
+      function onWindowMouseMove( event ) {
+        // マウスが動いた瞬間のx座標を取得して、中央からの距離を出す。
+        mouseX = event.clientX - windowHalfX;
+        // 前回回った時のgroup.rotation.yの値（targetRotationOnMouseDown） - （mousedownした時のx座標から動いた距離）
+        targetRotation = targetRotationOnMouseDown + ( mouseX - mouseXOnMouseDown ) * 0.02;
+      }
+
+      function onWindowMouseUp( event ) {
+        window.removeEventListener('mousemove', onWindowMouseMove, false);
+        window.removeEventListener('mouseup', onWindowMouseUp, false);
+        window.removeEventListener('mouseout', onWindowMouseOut, false);
+      }
+
+      function onWindowMouseOut( event ) {
+        window.removeEventListener('mousemove', onWindowMouseMove, false);
+        window.removeEventListener('mouseup', onWindowMouseUp, false);
+        window.removeEventListener('mouseout', onWindowMouseOut, false);
+      }
+
+      // function onWindowTouchStart( event ) {
+      //   if (event.touches.length == 1) {
+      //     event.preventDefault();
+      //     mouseXOnMouseDown = event.touches[0].pageX - windowHalfX;
+      //     targetRotationOnMouseDown = targetRotation;
+      //   }
+      // }
+      //
+      // function onWindowTouchMove( event ) {
+      //   if (event.touches.length == 1) {
+      //     event.preventDefault();
+      //     mouseX = event.touches[0].pageX - windowHalfX;
+      //     targetRotation = targetRotationOnMouseDown + (mouseX - mouseXOnMouseDown) * 0.05;
+      //   }
+      // }
+
+      function onWindowResize() {
+        windowHalfX = window.innerWidth / 2;
+        windowHalfY = window.innerHeight / 2;
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      };
+
+      let group = new THREE.Group();
+      scene.add( group );
+
+      init();
+      initLight();
+      CCaptureButtons();
+      animate();
+
+      function init() {
+
+        let boxNumber = 100;
+        for ( let i = 0; i < boxNumber; i ++ ) {
+          let size = Math.random() * 2.0;
+          geometry = new THREE.SphereGeometry(
+            size, // radius
+            16, // widthSegments
+            16, // heightSegments
+          );
+          let color = new THREE.Color();
+          let material = new THREE.MeshPhongMaterial( { color: 0xffffff, specular: 0x009900, shininess: 50 } );
+          material.wireframe = true;
+          cube = new THREE.Mesh( geometry, material );
+          cube.rotation.set( Math.random() * 3 - 1, Math.random() * 3 - 1, Math.random() * 3 - 1 );
+          cube.position.set( Math.random() * 40 - 20, Math.random() * 20 - 10, Math.random() * 30 - 15 );
+          group.add( cube );
+        }
+
+      };
+
+      function rotateCube() {
+
+        for ( let j = 0; j < group.children.length; j ++ ) {
+
+          // group.children[j].rotation.x += 0.02;
+          group.children[j].rotation.y += 0.02;
+
+        };
+
+      };
+
+
+      function initLight() {
+
+        light = new THREE.DirectionalLight( 0xFFFFFF, 1.0 );
+        light.position.set( 3, 0, 3 );
+        scene.add( light );
+        light = new THREE.DirectionalLight( 0xFFFFFF, 1.0 );
+        light.position.set( 0, 3, 3 );
+        scene.add( light );
+        light = new THREE.DirectionalLight( 0xFFFFFF, 0.5 );
+        light.position.set( 0, -3, 3 );
+        scene.add( light );
+
+      }
+
+      function render() {
+        rotateCube();
+        group.rotation.y += ( targetRotation - group.rotation.y ) * 0.05;
+        renderer.render( scene, camera );
+        capturer.capture( renderer.domElement );
+
+      };
+
+
+      function animate() {
+
+        requestAnimationFrame( animate );
+        render();
+
+      }
+
+    </script>
+
+  </body>
+</html>

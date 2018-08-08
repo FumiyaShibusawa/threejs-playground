@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>line and sphere</title>
+    <link rel="stylesheet" media="all" href="../../../css/style.css">
+  </head>
+  <body>
+    <a class="back-to-top" href="../index.html">back to top</a>
+    <div class="btn-cont">
+      <button id="start" type="button">Start Recording</button>
+      <button id="stop" type="button">Stop Recording</button>
+    </div>
+    <script src="../../js/three.js"></script>
+    <!-- CanvasRenderer is already deprecated. -->
+    <script src="../../js/renderers/CanvasRenderer.js"></script>
+    <!-- Projector is already deprecated. -->
+    <script src="../../js/renderers/Projector.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+    <script type="text/javascript">
+
+      // CCaptureの設定
+      const capturer = new CCapture( {
+        verbose: true,
+        display: true,
+        framerate: 60,
+        motionBlurFrames: 0,
+        quality: 99,
+        format: 'gif',
+        workersPath: '../../js/libs/',
+        timeLimit: 4,
+        frameLimit: 0,
+        autoSaveTime: 0,
+      } );
+
+      function setupButtons() {
+        const $start = document.getElementById('start');
+        const $stop = document.getElementById('stop');
+
+        $start.addEventListener('click', function(e) {
+          e.preventDefault();
+          capturer.start();
+          $start.style.backgroundColor = '#dddddd';
+          e.preventDefault();
+        }, false);
+
+        $stop.addEventListener('click', function(e) {
+          e.preventDefault();
+          capturer.stop();
+          $start.style.backgroundColor = '#ffffff';
+          capturer.save();
+        }, false);
+      };
+
+
+      var SCREEN_WIDTH = window.innerWidth,
+      SCREEN_HEIGHT = window.innerHeight,
+
+      mouseX = 0, mouseY = 0,
+
+      windowHalfX = window.innerWidth / 2,
+      windowHalfY = window.innerHeight / 2,
+
+      SEPARATION = 200,
+      AMOUNTX = 10,
+      AMOUNTY = 10,
+
+      camera, scene, renderer, geometry;
+
+      init();
+      render();
+      setupButtons();
+
+      function init() {
+        var container, separation = 100, amountX = 50, amountY = 50,
+        particles, particle;
+
+        container = document.createElement("div");
+        document.body.appendChild(container);
+
+        camera = new THREE.PerspectiveCamera(75, SCREEN_WIDTH / SCREEN_HEIGHT, 1, 10000);
+        camera.position.z = 1000;
+
+        scene = new THREE.Scene();
+
+        renderer = new THREE.CanvasRenderer(); // deprecated
+        renderer.setPixelRatio(window.devicePixelRatio); // HiDPIディスプレイ用の設定。高解像度でもボケないように。
+        renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+        container.appendChild(renderer.domElement);
+
+        // particles
+
+        var PI2 = Math.PI * 2;
+        var material = new THREE.SpriteCanvasMaterial({ // CanvasRenderer.js内のメソッド
+          color: 0x1184CE,
+          program: function(context) {
+            context.beginPath(); // こいつ何やってるか分からん
+            context.arc(0, 0, .5, 0, PI2, true); // このメソッドが何をやっているのか全く分からん
+            context.fill(); // これもよく分からん
+          }
+        });
+
+        for (var i = 0; i < 600; i++) {
+          particle = new THREE.Sprite(material);
+
+          // 座標位置を全方位にバラけさせる
+          particle.position.x += Math.random() * 2 - 1;
+          particle.position.y += Math.random() * 2 - 1;
+          particle.position.z += Math.random() * 2 - 1;
+          particle.position.normalize(); // 単位ベクトルに均す
+          particle.position.multiplyScalar(Math.random() * 30 + 450); // 450前後の実数倍して球体っぽく
+          particle.scale.multiplyScalar(Math.random() * 3 + 1); // サイズを2倍する
+          scene.add(particle);
+        };
+
+        // lines
+
+        for (var i = 0; i < 300; i++) {
+          geometry = new THREE.Geometry(); // 汎用的なgeometry。デフォルトでvertices,faces,colorsなどの属性を持つ
+
+          let vertex = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+          vertex.normalize(); // これも単位ベクトルに均す
+          vertex.multiplyScalar(450); // 450倍する（スカラ倍だと単に実数を代入するだけで良い）
+
+          geometry.vertices.push(vertex); // 作った座標をgeometryにループごとに追加していく
+
+          let vertex2 = vertex.clone(); // vertexと同じものを複製する
+          vertex2.multiplyScalar(Math.random() * 0.3 + 1); // 1 <= x < 1.3 の範囲でスカラ倍する
+          // => つまり距離450の座標から最大1.3倍した座標に変換する
+
+          geometry.vertices.push(vertex2); // 2つ目の座標を追加していく
+
+          var line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xfffff0, opacity: Math.random() }));
+          // 2つの座標を持ったgeometryでLineを作ると、その2点を結んだ線形ができる
+          scene.add(line);
+        };
+
+        // インタラクション周りのイベント設定
+        document.addEventListener('mousemove', onDocumentMouseMove, false);
+        document.addEventListener('touchstart', onDocumentTouchStart, false);
+        document.addEventListener('touchmove', onDocumentTouchMove, false);
+
+        window.addEventListener('resize', onWindowResize, false);
+      };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      function onDocumentMouseMove(event) {
+        mouseX = event.clientX - windowHalfX;
+        mouseY = event.clientY - windowHalfY;
+      };
+
+      function onDocumentTouchStart(event) {
+        if (event.touches.length > 1) {
+          event.preventDefault();
+
+          mouseX = event.touches[0].pageX - windowHalfX;
+          mouseY = event.touches[0].pageY - windowHalfY;
+        };
+      };
+
+      function onDocumentTouchMove(event) {
+        if (event.touches.length == 1) {
+          event.preventDefault();
+
+          mouseX = event.touches[0].pageX - windowHalfX;
+          mouseY = event.touches[0].pageY - windowHalfY;
+        };
+      };
+
+      function onWindowResize() {
+        windowHalfX = window.innerWidth / 2;
+        windowHalfY = window.innerHeight / 2;
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      };
+
+      function render() {
+        requestAnimationFrame(render);
+        // レンダリングするごとにマウスの位置を計算してカメラの位置を調整する
+        camera.position.x += (mouseX - camera.position.x) * 0.05;
+        camera.position.y += ( - mouseY + 200 - camera.position.y) * 0.05;
+        camera.lookAt(scene.position);
+
+        renderer.render(scene, camera);
+        capturer.capture(renderer.domElement);
+      };
+
+
+    </script>
+
+  </body>
+</html>

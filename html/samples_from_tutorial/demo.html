@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>demo for tgif | threejs</title>
+    <link rel="stylesheet" media="all" href="../../css/style.css">
+  </head>
+  <body>
+    <a class="back-to-top" href="../index.html">back to top</a>
+    <script src="../../js/three.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+    <script>
+      // sceneの生成
+      var scene = new THREE.Scene();
+
+      // cameraの生成
+      var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+      // rendererの生成と埋め込み
+      var renderer = new THREE.WebGLRenderer();
+      renderer.setSize( window.innerWidth, window.innerHeight );
+      document.body.appendChild( renderer.domElement );
+
+      camera.position.z = 0.5;
+
+      // 立方体の生成
+      var geometry = new THREE.BoxGeometry( 0.3, 0.3, 0.3, 1, 1, 1 );
+      var material = new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe: true } );
+      var cube = new THREE.Mesh( geometry, material );
+      cube.rotation.x += 0.5;
+      cube.rotation.y -= 0.6;
+      scene.add( cube );
+
+
+      var capturer = new CCapture( {
+        verbose: true,
+        display: true,
+        framerate: 60,
+        motionBlurFrames: 0,
+        format: 'webm',
+        // workersPath: '../../js/libs/',
+        timeLimit: 6.28
+      } );
+
+      function CCaptureButtons() {
+        window.addEventListener( 'load', function ( e ) {
+          e.preventDefault();
+          capturer.start();
+        }, false );
+      };
+
+      // ループアニメーションの生成
+      function animate() {
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+        renderer.render(scene, camera);
+        capturer.capture(renderer.domElement);
+        requestAnimationFrame(animate);
+      };
+
+      // アニメーションの実行
+      animate();
+      CCaptureButtons();
+
+    </script>
+  </body>
+</html>

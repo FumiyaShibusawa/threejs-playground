@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>webgl-demo62</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/libs/minMatrixb.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+  </head>
+  <style media="screen">
+    #pane {
+      margin: auto;
+      max-width: 500px;
+    }
+    #canvas {
+      display: block;
+      margin: 10px auto;
+    }
+  </style>
+  <body>
+    <div id="pane">
+      <canvas id="canvas"></canvas>
+    </div>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec3 normal;
+    attribute vec4 color;
+    uniform mat4 mvpMatrix;
+    uniform mat4 mMatrix;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec4 vColor;
+
+    void main(void){
+      vPosition = (mMatrix * vec4(position, 1.0)).xyz;
+      vNormal = normal;
+      vColor = color;
+      gl_Position = mvpMatrix * vec4(position, 1.0);
+    }
+    </script>
+
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform mat4 invMatrix;
+    uniform vec3 lightPosition;
+    uniform vec3 eyePosition;
+    uniform vec4 ambientColor;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec4 vColor;
+
+    void main(void){
+      vec3 lightVec = lightPosition - vPosition;
+      vec3 invLight = normalize(invMatrix * vec4(lightVec, 0.0)).xyz;
+      vec3 invEye   = normalize(invMatrix * vec4(eyePosition, 0.0)).xyz;
+      vec3 halfLE   = normalize(invLight + invEye);
+      float diffuse = clamp(dot(vNormal, invLight), 0.0, 1.0) + 0.2;
+      float specular = pow(clamp(dot(vNormal, halfLE), 0.0, 1.0), 50.0);
+      vec4 destColor = vColor * vec4(vec3(diffuse), 1.0) + vec4(vec3(specular), 1.0) + ambientColor;
+      gl_FragColor = destColor;
+    }
+    </script>
+
+
+    <script type="text/javascript">
+    // canvas とクォータニオンをグローバルに扱う
+    var canvas;
+    var q = new qtnIV();
+    var qt = q.identity(q.create());
+
+    // マウスムーブイベントに登録する処理
+    function mouseMove(e){
+      var cw = canvas.width;
+      var ch = canvas.height;
+      var wh = 1 / Math.sqrt(cw * cw + ch * ch);
+      var x = e.clientX - canvas.offsetLeft - cw * 0.5;
+      var y = e.clientY - canvas.offsetTop - ch * 0.5;
+      var sq = Math.sqrt(x * x + y * y);
+      var r = sq * 2.0 * Math.PI * wh;
+      if(sq != 1){
+        sq = 1 / sq;
+        x *= sq;
+        y *= sq;
+      }
+      q.rotate(r, [y, x, 0.0], qt);
+    }
+
+    window.onload = function() {
+      // canvasエレメントを取得
+      canvas = document.getElementById('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+
+      // イベント処理
+      canvas.addEventListener('mousemove', mouseMove, true);
+
+      // webglコンテキストを取得
+      var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+
+      //頂点シェーダとフラグメントシェーダからプログラムオブジェクトを生成
+      var prg = create_program(create_shader('vs'), create_shader('fs'));
+      // attributeLocationを配列に取得
+      var attLocation = [];
+      attLocation[0] = gl.getAttribLocation(prg, 'position');
+      attLocation[1] = gl.getAttribLocation(prg, 'normal');
+      attLocation[2] = gl.getAttribLocation(prg, 'color');
+      // attributeの要素数を配列に格納
+      var attStride = [];
+      attStride[0] = 3;
+      attStride[1] = 3;
+      attStride[2] = 4;
+      var uniLocation = [];
+      uniLocation[0] = gl.getUniformLocation(prg, 'mvpMatrix');
+      uniLocation[1] = gl.getUniformLocation(prg, 'mMatrix');
+      uniLocation[2] = gl.getUniformLocation(prg, 'invMatrix');
+      uniLocation[3] = gl.getUniformLocation(prg, 'lightPosition');
+      uniLocation[4] = gl.getUniformLocation(prg, 'eyePosition');
+      uniLocation[5] = gl.getUniformLocation(prg, 'ambientColor');
+
+
+      // トーラス
+      var torusData = torus(64, 64, 1.0, 3.0, [0.25, 0.75, 0.25, 1.0]);
+    	var tPosition = create_vbo(torusData.p);
+    	var tNormal   = create_vbo(torusData.n);
+    	var tColor    = create_vbo(torusData.c);
+    	var tVBOList  = [tPosition, tNormal, tColor];
+    	var tIndex = create_ibo(torusData.i);
+
+      // 球体
+      var sphereData = sphere(64, 64, 4.0, [0.75, 0.25, 0.75, 1.0]);
+    	var sPosition = create_vbo(sphereData.p);
+    	var sNormal   = create_vbo(sphereData.n);
+    	var sColor    = create_vbo(sphereData.c);
+    	var sVBOList  = [sPosition, sNormal, sColor];
+    	var sIndex = create_ibo(sphereData.i);
+
+      // 拡張機能を有効化
+      var ext;
+      ext = gl.getExtension('OES_vertex_array_object');
+      if(ext == null){
+        alert('vertex array object not supported');
+        return;
+      }
+
+      // VAOを生成してバインドする（トーラス）
+      var torusVAO = ext.createVertexArrayOES();
+      ext.bindVertexArrayOES(torusVAO);
+
+      // VAOにVBOとIBOを登録する（トーラス）
+      set_attribute(tVBOList, attLocation, attStride);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tIndex);
+
+      // VAOを生成してバインドする（球体）
+      var sphereVAO = ext.createVertexArrayOES();
+      ext.bindVertexArrayOES(sphereVAO);
+
+      // VAOにVBOとIBOを登録する（球体）
+      set_attribute(sVBOList, attLocation, attStride);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIndex);
+
+      // VAOのバインドを削除
+      ext.bindVertexArrayOES(null);
+
+      // 各種座標変換行列の初期化
+      var m = new matIV();
+      var mMatrix = m.identity(m.create());
+      var vMatrix = m.identity(m.create());
+      var pMatrix = m.identity(m.create());
+      var tmpMatrix = m.identity(m.create());
+      var mvpMatrix = m.identity(m.create());
+      var invMatrix = m.identity(m.create());
+
+      // 点光源の位置
+      var lightPosition = [0.0, 0.0, 0.0];
+
+      // 環境光の色
+      var ambientColor = [0.1, 0.1, 0.1, 1.0];
+
+      // カウンタの宣言
+      var count = 0;
+
+      // 深度テストを有効化
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LEQUAL);
+      gl.enable(gl.CULL_FACE);
+
+      // 恒常ループ
+      (function(){
+        // canvasを初期化
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // カウンタをインクリメントする
+        count++;
+
+        // カウンタを元にラジアンと各種座標を算出
+        var rad = (count % 360) * Math.PI / 180;
+        var tx = Math.cos(rad) * 7.0;
+        var ty = Math.sin(rad) * 7.0;
+        var tz = Math.sin(rad) * 7.0;
+
+        // ビュー×プロジェクション座標変換行列
+        var eyePosition = new Array();
+        var camUpDirection = new Array();
+        q.toVecIII([0.0, 20.0, 0.0], qt, eyePosition);
+        q.toVecIII([0.0, 0.0, -1.0], qt, camUpDirection);
+        m.lookAt(eyePosition, [0, 0, 0], camUpDirection, vMatrix);
+        m.perspective(90, canvas.width / canvas.height, 0.1, 40.0, pMatrix);
+        m.multiply(pMatrix, vMatrix, tmpMatrix);
+
+        // VAO をバインドする
+        ext.bindVertexArrayOES(torusVAO);
+
+        // モデル座標変換行列の生成
+        m.identity(mMatrix);
+        m.translate(mMatrix, [-tx, ty, tz], mMatrix);
+        m.rotate(mMatrix, -rad, [0, 1, 1], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+        m.inverse(mMatrix, invMatrix);
+        gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+        gl.uniformMatrix4fv(uniLocation[1], false, mMatrix);
+        gl.uniformMatrix4fv(uniLocation[2], false, invMatrix);
+        gl.uniform3fv(uniLocation[3], lightPosition);
+        gl.uniform3fv(uniLocation[4], eyePosition);
+        gl.uniform4fv(uniLocation[5], ambientColor);
+        gl.drawElements(gl.TRIANGLES, torusData.i.length, gl.UNSIGNED_SHORT, 0);
+
+        // VAO をバインドする
+        ext.bindVertexArrayOES(sphereVAO);
+
+        // モデル座標変換行列の生成
+        m.identity(mMatrix);
+        m.translate(mMatrix, [tx, -ty, -tz], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+        m.inverse(mMatrix, invMatrix);
+        gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+        gl.uniformMatrix4fv(uniLocation[1], false, mMatrix);
+        gl.uniformMatrix4fv(uniLocation[2], false, invMatrix);
+        gl.drawElements(gl.TRIANGLES, sphereData.i.length, gl.UNSIGNED_SHORT, 0);
+
+        // コンテキストの再描画
+        gl.flush();
+
+        // ループのために再帰呼び出し
+        setTimeout(arguments.callee, 1000 / 30);
+      })();
+
+      // create WebGLShader object
+      function create_shader(id) {
+        var shader;
+        var scriptElement = document.getElementById(id);
+        if (!scriptElement) { return };
+        switch (scriptElement.type) {
+          case 'x-shader/x-vertex':
+            shader = gl.createShader(gl.VERTEX_SHADER);
+            break;
+          case 'x-shader/x-fragment':
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+            break;
+          default:
+            return;
+        };
+
+        gl.shaderSource(shader, scriptElement.text);
+        gl.compileShader(shader);
+        if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          return shader;
+        } else {
+          alert(gl.getShaderInfoLog(shader));
+        }
+      };
+
+      // create WebGLProgram object
+      function create_program(vs, fs){
+        var program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+
+        gl.linkProgram(program);
+
+        if (gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          gl.useProgram(program);
+          return program;
+        } else {
+          alert(gl.getProgramInfoLog(program));
+          console.log(gl.getProgramInfoLog(program));
+        }
+      };
+
+
+      // create WebGLBuffer for vertex
+      function create_vbo(data) {
+        var vbo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        return vbo;
+      };
+
+      function set_attribute(vbo, attL, attS) {
+        for (var i in vbo) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, vbo[ i ]);
+          gl.enableVertexAttribArray(attL[ i ]);
+          gl.vertexAttribPointer(attL[ i ], attS[ i ], gl.FLOAT, false, 0, 0);
+        }
+      };
+
+      // create WebGLBuffer for index
+      function create_ibo(data) {
+        var ibo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Int16Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        return ibo;
+      };
+
+      // フレームバッファをオブジェクトとして生成する関数
+      function create_framebuffer(width, height){
+        var frameBuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+
+        var depthRenderBuffer = gl.createRenderbuffer();
+        gl.bindRenderbuffer(gl.RENDERBUFFER, depthRenderBuffer);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthRenderBuffer);
+
+        var fTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, fTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT, null);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fTexture, 0);
+
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        return {f: frameBuffer, d: depthRenderBuffer, t: fTexture};
+      };
+
+      function create_cube_texture(source, target) {
+        var cImg = [];
+        for(var i = 0; i < source.length; i ++) {
+          cImg[i] = new cubeMapImage();
+          cImg[i].data.src = source[i];
+        };
+
+        function cubeMapImage() {
+          this.data = new Image();
+          this.data.onload = function() {
+            this.imageDataLoaded = true;
+            checkLoaded();
+          };
+        };
+
+        function checkLoaded() {
+          if(cImg[0].data.imageDataLoaded &&
+             cImg[1].data.imageDataLoaded &&
+             cImg[2].data.imageDataLoaded &&
+             cImg[3].data.imageDataLoaded &&
+             cImg[4].data.imageDataLoaded &&
+             cImg[5].data.imageDataLoaded){generateCubeMap();}
+        };
+
+        function generateCubeMap() {
+          var tex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_CUBE_MAP, tex);
+          for(var j = 0; j < source.length; j++) {
+            gl.texImage2D(target[j], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cImg[j].data);
+          }
+          gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          cubeTexture = tex;
+          gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+        }
+      };
+
+
+    };
+
+    </script>
+  </body>
+</html>

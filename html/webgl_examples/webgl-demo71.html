@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>webgl-demo71</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/libs/minMatrixb.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+  </head>
+  <style media="screen">
+    #pane {
+      margin: auto;
+      /*max-width: 512px;*/
+    }
+    #canvas {
+      display: block;
+      margin: 10px auto;
+    }
+  </style>
+  <body>
+    <div id="pane">
+      <canvas id="canvas"></canvas>
+    </div>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec2 position;
+    uniform float pointSize;
+    varying   vec4  vColor;
+
+    void main(void){
+      gl_Position  = vec4(position, 0.0, 1.0);
+      gl_PointSize = pointSize;
+    }
+    </script>
+
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform vec4 pointColor;
+    void main(void){
+      gl_FragColor = pointColor;
+    }
+    </script>
+
+
+    <script type="text/javascript">
+    window.onload = function(){
+      var canvas;
+      var mouseFlag = false;    // マウス操作のフラグ
+      var mousePositionX = 0.0; // マウス座標X（-1.0 から 1.0）
+      var mousePositionY = 0.0; // マウス座標Y（-1.0 から 1.0）
+
+      // canvasエレメントを取得
+      canvas = document.getElementById('canvas');
+      canvas.width = Math.min(window.innerWidth, window.innerHeight);
+      canvas.height = canvas.width;
+
+      // イベント登録
+      canvas.addEventListener('mousedown', mouseDown, true);
+      canvas.addEventListener('mouseup', mouseUp, true);
+      canvas.addEventListener('mousemove', mouseMove, true);
+
+      // webglコンテキストを取得
+      var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+      //頂点シェーダとフラグメントシェーダからプログラムオブジェクトを生成
+      var prg = create_program(create_shader('vs'), create_shader('fs'));
+      // attributeLocationを配列に取得
+      var attLocation = new Array();
+      attLocation[0] = gl.getAttribLocation(prg, 'position');
+
+      // VBO生成
+      var position = [];
+      var vector = [];
+      var resolutionX = 100;
+      var resolutionY = 100;
+      var intervalX = 1.0 / resolutionX;
+      var intervalY = 1.0 / resolutionY;
+      var verticesCount = resolutionX * resolutionY;
+      (function(){
+        var i, j, x, y;
+        for(i = 0; i < resolutionX; i++){
+          for(j = 0; j < resolutionY; j++){
+            // 頂点の座標
+            x = i * intervalX * 2.0 - 1.0;
+            y = j * intervalY * 2.0 - 1.0;
+            position.push(x, y);
+
+            // 頂点のベクトル
+            vector.push(0.0, 0.0);
+          }
+        }
+      })();
+
+      var pointPosition = new Float32Array(position);
+      var vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.enableVertexAttribArray(attLocation[0]);
+      gl.vertexAttribPointer(attLocation[0], 2, gl.FLOAT, false, 0, 0);
+      gl.bufferData(gl.ARRAY_BUFFER, pointPosition, gl.DYNAMIC_DRAW);
+
+      var uniLocation = new Array();
+      uniLocation[0] = gl.getUniformLocation(prg, 'pointSize');
+      uniLocation[1] = gl.getUniformLocation(prg, 'pointColor');
+
+      // ブレンドファクター
+      gl.enable(gl.BLEND);
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE);
+      // // 深度テストとカリング有効化
+      // gl.enable(gl.DEPTH_TEST);
+      // gl.depthFunc(gl.LEQUAL);
+      // gl.enable(gl.CULL_FACE);
+
+      // カウンタの宣言
+      var count = 0;
+
+      // 速度関連
+      var velocity = 0.0;
+      var MAX_VELOCITY = 2.0;
+      var SPEED = 0.02;
+
+      // 恒常ループ
+      (function render(){
+        var i, j, k, l;
+
+        // canvasを初期化
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        // gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // カウンタから色を算出
+        count++;
+        var pointColor = hsva((count % 720) / 2, 1.0, 1.0, 0.5);
+
+        // マウスフラグを見て速度を修正
+        if(mouseFlag){
+          velocity = MAX_VELOCITY;
+        }else{
+          velocity *= 0.95;
+        }
+
+        // 点を更新する
+        for(i = 0; i < resolutionX; i++){
+          k = i * resolutionX;
+          for(j = 0; j < resolutionY; j++){
+            l = (k + j) * 2;
+            // マウスフラグを見てベクトルを更新する
+            if(mouseFlag){
+              var p = vectorUpdate(
+                pointPosition[l],
+                pointPosition[l + 1],
+                mousePositionX,
+                mousePositionY,
+                vector[l],
+                vector[l + 1]
+              );
+              vector[l]     = p[0];
+              vector[l + 1] = p[1];
+            }
+            pointPosition[l]     += vector[l]     * velocity * SPEED;
+            pointPosition[l + 1] += vector[l + 1] * velocity * SPEED;
+          }
+        };
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, pointPosition);
+
+        // 点を描画
+        gl.uniform1f(uniLocation[0], velocity * 1.25 + 0.25);
+        gl.uniform4fv(uniLocation[1], pointColor);
+        gl.drawArrays(gl.POINTS, 0, verticesCount);
+
+        // コンテキストの再描画
+        gl.flush();
+
+        // ループのために再帰呼び出し
+        // setTimeout(arguments.callee);
+        requestAnimationFrame(render);
+      })();
+
+      // イベント処理
+      function mouseDown(eve){
+        mouseFlag = true;
+      };
+      function mouseUp(eve){
+        mouseFlag = false;
+      };
+      function mouseMove(eve){
+        if(mouseFlag){
+          var cw = canvas.width;
+          var ch = canvas.height;
+          mousePositionX = (eve.clientX - canvas.offsetLeft - cw / 2.0) / cw * 2.0;
+          mousePositionY = -(eve.clientY - canvas.offsetTop - ch / 2.0) / ch * 2.0;
+        }
+      };
+
+      // ベクトル演算
+      function vectorUpdate(x, y, tx, ty, vx, vy){
+        var px = tx - x;
+        var py = ty - y;
+        var r = Math.sqrt(px * px + py * py) * 5.0;
+        if(r !== 0.0){
+          px /= r;
+          py /= r;
+        }
+        px += vx;
+        py += vy;
+        r = Math.sqrt(px * px + py * py);
+        if(r !== 0.0){
+          px /= r;
+          py /= r;
+        }
+        return [px, py];
+      }
+
+      // シェーダを生成する関数
+      function create_shader(id){
+        // シェーダを格納する変数
+        var shader;
+
+        // HTMLからscriptタグへの参照を取得
+        var scriptElement = document.getElementById(id);
+
+        // scriptタグが存在しない場合は抜ける
+        if(!scriptElement){return;}
+
+        // scriptタグのtype属性をチェック
+        switch(scriptElement.type){
+
+          // 頂点シェーダの場合
+          case 'x-shader/x-vertex':
+            shader = gl.createShader(gl.VERTEX_SHADER);
+            break;
+
+            // フラグメントシェーダの場合
+          case 'x-shader/x-fragment':
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+            break;
+          default:
+            return;
+        };
+
+        // 生成されたシェーダにソースを割り当てる
+        gl.shaderSource(shader, scriptElement.text);
+
+        // シェーダをコンパイルする
+        gl.compileShader(shader);
+
+        // シェーダが正しくコンパイルされたかチェック
+        if(gl.getShaderParameter(shader, gl.COMPILE_STATUS)){
+
+          // 成功していたらシェーダを返して終了
+          return shader;
+        }else{
+
+          // 失敗していたらエラーログをアラートする
+          alert(gl.getShaderInfoLog(shader));
+        }
+      };
+
+      // プログラムオブジェクトを生成しシェーダをリンクする関数
+      function create_program(vs, fs){
+        // プログラムオブジェクトの生成
+        var program = gl.createProgram();
+
+        // プログラムオブジェクトにシェーダを割り当てる
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+
+        // シェーダをリンク
+        gl.linkProgram(program);
+
+        // シェーダのリンクが正しく行なわれたかチェック
+        if(gl.getProgramParameter(program, gl.LINK_STATUS)){
+
+          // 成功していたらプログラムオブジェクトを有効にする
+          gl.useProgram(program);
+
+          // プログラムオブジェクトを返して終了
+          return program;
+        }else{
+
+          // 失敗していたらエラーログをアラートする
+          alert(gl.getProgramInfoLog(program));
+          console.log(gl.getProgramInfoLog(program));
+        }
+      };
+
+
+      // create WebGLBuffer for vertex
+      function create_vbo(data) {
+        var vbo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        return vbo;
+      };
+
+      // VBOをバインドし登録する関数
+      function set_attribute(vbo, attL, attS){
+        // 引数として受け取った配列を処理する
+        for(var i in vbo){
+          // バッファをバインドする
+          gl.bindBuffer(gl.ARRAY_BUFFER, vbo[i]);
+
+          // attributeLocationを有効にする
+          gl.enableVertexAttribArray(attL[i]);
+
+          // attributeLocationを通知し登録する
+          gl.vertexAttribPointer(attL[i], attS[i], gl.FLOAT, false, 0, 0);
+        }
+      };
+
+      // create WebGLBuffer for index
+      function create_ibo(data) {
+        var ibo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Int16Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        return ibo;
+      };
+
+      // テクスチャを生成する関数
+      function create_texture(source){
+        // イメージオブジェクトの生成
+        var img = new Image();
+
+        // データのオンロードをトリガーにする
+        img.onload = function(){
+          // テクスチャオブジェクトの生成
+          var tex = gl.createTexture();
+
+          // テクスチャをバインドする
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+
+          // テクスチャへイメージを適用
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+          // ミップマップを生成
+          gl.generateMipmap(gl.TEXTURE_2D);
+
+          // テクスチャのバインドを無効化
+          gl.bindTexture(gl.TEXTURE_2D, null);
+
+          // 生成したテクスチャをグローバル変数に代入
+          texture = tex;
+        };
+
+        // イメージオブジェクトのソースを指定
+        img.src = source;
+      }
+
+      // フレームバッファをオブジェクトとして生成する関数
+      function create_framebuffer(width, height){
+        var frameBuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+
+        var depthRenderBuffer = gl.createRenderbuffer();
+        gl.bindRenderbuffer(gl.RENDERBUFFER, depthRenderBuffer);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthRenderBuffer);
+
+        var fTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, fTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT, null);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fTexture, 0);
+
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        return {f: frameBuffer, d: depthRenderBuffer, t: fTexture};
+      };
+
+      function create_cube_texture(source, target) {
+        var cImg = [];
+        for(var i = 0; i < source.length; i ++) {
+          cImg[i] = new cubeMapImage();
+          cImg[i].data.src = source[i];
+        };
+
+        function cubeMapImage() {
+          this.data = new Image();
+          this.data.onload = function() {
+            this.imageDataLoaded = true;
+            checkLoaded();
+          };
+        };
+
+        function checkLoaded() {
+          if(cImg[0].data.imageDataLoaded &&
+             cImg[1].data.imageDataLoaded &&
+             cImg[2].data.imageDataLoaded &&
+             cImg[3].data.imageDataLoaded &&
+             cImg[4].data.imageDataLoaded &&
+             cImg[5].data.imageDataLoaded){generateCubeMap();}
+        };
+
+        function generateCubeMap() {
+          var tex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_CUBE_MAP, tex);
+          for(var j = 0; j < source.length; j++) {
+            gl.texImage2D(target[j], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cImg[j].data);
+          }
+          gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          cubeTexture = tex;
+          gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+        }
+      };
+    };
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>webgl-demo77</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/libs/minMatrixb.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+  </head>
+  <style media="screen">
+    #pane {
+      margin: auto;
+      /*max-width: 512px;*/
+    }
+    #canvas {
+      display: block;
+      margin: 10px auto;
+    }
+  </style>
+  <body>
+    <div id="pane">
+      <canvas id="canvas"></canvas>
+    </div>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec3 normal;
+    attribute vec4 color;
+    uniform mat4 mvpMatrix;
+    varying vec3 vNormal;
+    varying vec4 vColor;
+
+    void main(){
+      vNormal = normal;
+      vColor = color;
+      gl_Position = mvpMatrix * vec4(position, 1.0);
+    }
+    </script>
+
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform mat4 invMatrix;
+    uniform vec3 lightDirection;
+    varying vec3 vNormal;
+    varying vec4 vColor;
+
+    void main(){
+      vec3 light = normalize(invMatrix * vec4(lightDirection, 0.0)).xyz;
+      float diff = clamp(dot(vNormal, light), 0.2, 1.0);
+      gl_FragColor = vec4(vColor.rgb * diff, 1.0);
+    }
+    </script>
+
+
+    <script type="text/javascript">
+    // canvas とクォータニオンをグローバルに扱う
+    var canvas;
+    var q = new qtnIV();
+    var qt = q.identity(q.create());
+
+    // マウスムーブイベントに登録する処理
+    function mouseMove(e){
+    	var cw = canvas.width;
+    	var ch = canvas.height;
+    	var wh = 1 / Math.sqrt(cw * cw + ch * ch);
+    	var x = e.clientX - canvas.offsetLeft - cw * 0.5;
+    	var y = e.clientY - canvas.offsetTop - ch * 0.5;
+    	var sq = Math.sqrt(x * x + y * y);
+    	var r = sq * 2.0 * Math.PI * wh;
+    	if(sq != 1){
+    		sq = 1 / sq;
+    		x *= sq;
+    		y *= sq;
+    	}
+    	q.rotate(r, [y, x, 0.0], qt);
+    };
+    window.onload = function(){
+      // canvasエレメントを取得
+      canvas = document.getElementById('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+
+      // イベント登録
+      canvas.addEventListener('mousemove', mouseMove, true);
+
+      // webglコンテキストを取得
+      var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+      // シェーダの準備と各種ロケーションの取得
+      var prg = create_program(create_shader('vs'), create_shader('fs'));
+      // attributeLocationを配列に取得
+      var attLocation = [];
+      attLocation[0] = gl.getAttribLocation(prg, 'position');
+      attLocation[1] = gl.getAttribLocation(prg, 'normal');
+      attLocation[2] = gl.getAttribLocation(prg, 'color');
+      var attStride = [];
+      attStride[0] = 3;
+      attStride[1] = 3;
+      attStride[2] = 4;
+      var uniLocation = [];
+      uniLocation[0] = gl.getUniformLocation(prg, 'mvpMatrix');
+      uniLocation[1] = gl.getUniformLocation(prg, 'invMatrix');
+      uniLocation[2] = gl.getUniformLocation(prg, 'lightDirection');
+
+      // トーラスモデル
+      var torusData     = torus(32, 32, 2.0, 3.0);
+      var tIndex        = create_ibo(torusData.i);
+
+      // インターリーブ配列を作る
+      var stride = 0;
+      attStride.map(function(value){
+        stride += value;
+      });
+      var vertexBufferData = [];
+      (function(){
+        var i, j, k, l, m;
+        var position = torusData.p;
+        var normal = torusData.n;
+        var color = torusData.c;
+        for(i = 0, j = position.length / 3; i < j; i++){
+          k = attStride[0] * i;
+          l = attStride[1] * i;
+          m = attStride[2] * i;
+          vertexBufferData.push(
+            position[k], position[k + 1], position[k + 2],
+            normal[l], normal[l + 1], normal[l + 2],
+            color[m], color[m + 1], color[m + 2], color[m + 3]
+          );
+        }
+      })();
+
+      // VBO を生成する
+      var tVBO = create_vbo(vertexBufferData);
+
+      // VBO をバインドする（create_vbo 関数では汎用性のため最後にバッファをアンバインドしているので）
+      gl.bindBuffer(gl.ARRAY_BUFFER, tVBO);
+
+      // attributeLocationを有効化し登録すｒ
+      var byteLength = stride * 4;
+      gl.enableVertexAttribArray(attLocation[0]);
+      gl.vertexAttribPointer(attLocation[0], attStride[0], gl.FLOAT, false, byteLength, 0);
+      gl.enableVertexAttribArray(attLocation[1]);
+      gl.vertexAttribPointer(attLocation[1], attStride[1], gl.FLOAT, false, byteLength, 12);
+      gl.enableVertexAttribArray(attLocation[2]);
+      gl.vertexAttribPointer(attLocation[2], attStride[2], gl.FLOAT, false, byteLength, 24);
+
+      // IBO をバインドする
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tIndex);
+
+      // 各種行列の生成と初期化
+      var m = new matIV();
+      var mMatrix   = m.identity(m.create());
+      var vMatrix   = m.identity(m.create());
+      var pMatrix   = m.identity(m.create());
+      var tmpMatrix = m.identity(m.create());
+      var mvpMatrix = m.identity(m.create());
+      var invMatrix = m.identity(m.create());
+
+      // 深度テストとカリングを有効にする
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LEQUAL);
+      gl.enable(gl.CULL_FACE);
+
+      // 背景の初期化設定
+      gl.clearColor(0.3, 0.3, 0.3, 1.0);
+      gl.clearDepth(1.0);
+
+      // ライトの向き
+      var lightDirection = [1.0, 1.0, 1.0];
+
+      // カウンタの宣言
+      var count = 0;
+      render();
+      function render(){
+        // カウンタをインクリメントする
+        count++;
+
+        // カウンタを元にラジアンを算出
+        var rad = (count % 360) * Math.PI / 180;
+
+        // canvas を初期化
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // ビュー×プロジェクション座標変換行列
+        var eyePosition = [];
+        var camUpDirection = [];
+        q.toVecIII([0.0, 25.0, 0.0], qt, eyePosition);
+        q.toVecIII([0.0, 0.0, -1.0], qt, camUpDirection);
+        m.lookAt(eyePosition, [0, 0, 0], camUpDirection, vMatrix);
+        m.perspective(90, canvas.width / canvas.height, 0.1, 50.0, pMatrix);
+        m.multiply(pMatrix, vMatrix, tmpMatrix);
+
+        // トーラスをレンダリング
+        for(var i = 0; i < 9; i++){
+          m.identity(mMatrix);
+          m.rotate(mMatrix, i * 2 * Math.PI / 9, [0, 1, 0], mMatrix);
+          m.translate(mMatrix, [0.0, 0.0, 15.0], mMatrix);
+          m.rotate(mMatrix, rad, [1, 1, 0], mMatrix);
+          m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+          m.inverse(mMatrix, invMatrix);
+          gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+          gl.uniformMatrix4fv(uniLocation[1], false, invMatrix);
+          gl.uniform3fv(uniLocation[2], lightDirection);
+          gl.drawElements(gl.TRIANGLES, torusData.i.length, gl.UNSIGNED_SHORT, 0);
+        };
+
+
+
+
+        // コンテキストの描画
+        gl.flush();
+
+
+        // ループのために再帰呼び出し
+        requestAnimationFrame(render);
+      };
+
+      // シェーダを生成する関数
+      function create_shader(id){
+        // シェーダを格納する変数
+        var shader;
+
+        // HTMLからscriptタグへの参照を取得
+        var scriptElement = document.getElementById(id);
+
+        // scriptタグが存在しない場合は抜ける
+        if(!scriptElement){return;}
+
+        // scriptタグのtype属性をチェック
+        switch(scriptElement.type){
+
+          // 頂点シェーダの場合
+          case 'x-shader/x-vertex':
+            shader = gl.createShader(gl.VERTEX_SHADER);
+            break;
+
+            // フラグメントシェーダの場合
+          case 'x-shader/x-fragment':
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+            break;
+          default:
+            return;
+        };
+
+        // 生成されたシェーダにソースを割り当てる
+        gl.shaderSource(shader, scriptElement.text);
+
+        // シェーダをコンパイルする
+        gl.compileShader(shader);
+
+        // シェーダが正しくコンパイルされたかチェック
+        if(gl.getShaderParameter(shader, gl.COMPILE_STATUS)){
+
+          // 成功していたらシェーダを返して終了
+          return shader;
+        }else{
+
+          // 失敗していたらエラーログをアラートする
+          alert(gl.getShaderInfoLog(shader));
+        }
+      };
+
+      // プログラムオブジェクトを生成しシェーダをリンクする関数
+      function create_program(vs, fs){
+        // プログラムオブジェクトの生成
+        var program = gl.createProgram();
+
+        // プログラムオブジェクトにシェーダを割り当てる
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+
+        // シェーダをリンク
+        gl.linkProgram(program);
+
+        // シェーダのリンクが正しく行なわれたかチェック
+        if(gl.getProgramParameter(program, gl.LINK_STATUS)){
+
+          // 成功していたらプログラムオブジェクトを有効にする
+          gl.useProgram(program);
+
+          // プログラムオブジェクトを返して終了
+          return program;
+        }else{
+
+          // 失敗していたらエラーログをアラートする
+          alert(gl.getProgramInfoLog(program));
+          console.log(gl.getProgramInfoLog(program));
+        }
+      };
+
+
+      // create WebGLBuffer for vertex
+      function create_vbo(data) {
+        var vbo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        return vbo;
+      };
+
+      // VBOをバインドし登録する関数
+      function set_attribute(vbo, attL, attS){
+        // 引数として受け取った配列を処理する
+        for(var i in vbo){
+          // バッファをバインドする
+          gl.bindBuffer(gl.ARRAY_BUFFER, vbo[i]);
+
+          // attributeLocationを有効にする
+          gl.enableVertexAttribArray(attL[i]);
+
+          // attributeLocationを通知し登録する
+          gl.vertexAttribPointer(attL[i], attS[i], gl.FLOAT, false, 0, 0);
+        }
+      };
+
+      // create WebGLBuffer for index
+      function create_ibo(data) {
+        var ibo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Int16Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        return ibo;
+      };
+
+      // テクスチャを生成する関数
+      function create_texture(source){
+        // イメージオブジェクトの生成
+        var img = new Image();
+
+        // データのオンロードをトリガーにする
+        img.onload = function(){
+          // テクスチャオブジェクトの生成
+          var tex = gl.createTexture();
+
+          // テクスチャをバインドする
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+
+          // テクスチャへイメージを適用
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+          // ミップマップを生成
+          gl.generateMipmap(gl.TEXTURE_2D);
+
+          // テクスチャのバインドを無効化
+          gl.bindTexture(gl.TEXTURE_2D, null);
+
+          // 生成したテクスチャをグローバル変数に代入
+          texture = tex;
+        };
+
+        // イメージオブジェクトのソースを指定
+        img.src = source;
+      }
+
+      // フレームバッファをオブジェクトとして生成する関数
+      function create_framebuffer_MRT(width, height){
+        // フレームバッファの生成
+        var frameBuffer = gl.createFramebuffer();
+
+        // フレームバッファをWebGLにバインド
+        gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+
+        // フレームバッファ用テクスチャを格納する配列
+        var fTexture = [];
+
+        // ループ処理でテクスチャを初期化
+        for(var i = 0; i < 4; i++){
+          fTexture[i] = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, fTexture[i]);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+          // テクスチャパラメータ
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+          // フレームバッファにテクスチャを関連付ける
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, ext.COLOR_ATTACHMENT0_WEBGL + i, gl.TEXTURE_2D, fTexture[i], 0);
+        }
+
+        // 深度バッファ用レンダーバッファ
+        var depthRenderBuffer = gl.createRenderbuffer();
+        gl.bindRenderbuffer(gl.RENDERBUFFER, depthRenderBuffer);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthRenderBuffer);
+
+        // 各種オブジェクトのバインドを解除
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        // オブジェクトを返して終了
+        return {
+          f: frameBuffer,
+          d: depthRenderBuffer,
+          t: fTexture
+        };
+      };
+
+      // // フレームバッファをオブジェクトとして生成する関数
+      // function create_framebuffer(width, height){
+      //   var frameBuffer = gl.createFramebuffer();
+      //   gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+      //
+      //   var depthRenderBuffer = gl.createRenderbuffer();
+      //   gl.bindRenderbuffer(gl.RENDERBUFFER, depthRenderBuffer);
+      //   gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+      //   gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthRenderBuffer);
+      //
+      //   var fTexture = gl.createTexture();
+      //   gl.bindTexture(gl.TEXTURE_2D, fTexture);
+      //   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT, null);
+      //
+      //   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      //   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      //   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      //   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      //
+      //   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fTexture, 0);
+      //
+      //   gl.bindTexture(gl.TEXTURE_2D, null);
+      //   gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+      //   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      //
+      //   return {f: frameBuffer, d: depthRenderBuffer, t: fTexture};
+      // };
+      //
+      function create_cube_texture(source, target) {
+        var cImg = [];
+        for(var i = 0; i < source.length; i ++) {
+          cImg[i] = new cubeMapImage();
+          cImg[i].data.src = source[i];
+        };
+
+        function cubeMapImage() {
+          this.data = new Image();
+          this.data.onload = function() {
+            this.imageDataLoaded = true;
+            checkLoaded();
+          };
+        };
+
+        function checkLoaded() {
+          if(cImg[0].data.imageDataLoaded &&
+             cImg[1].data.imageDataLoaded &&
+             cImg[2].data.imageDataLoaded &&
+             cImg[3].data.imageDataLoaded &&
+             cImg[4].data.imageDataLoaded &&
+             cImg[5].data.imageDataLoaded){generateCubeMap();}
+        };
+
+        function generateCubeMap() {
+          var tex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_CUBE_MAP, tex);
+          for(var j = 0; j < source.length; j++) {
+            gl.texImage2D(target[j], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cImg[j].data);
+          }
+          gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          cubeTexture = tex;
+          gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+        }
+      };
+    };
+
+    </script>
+  </body>
+</html>

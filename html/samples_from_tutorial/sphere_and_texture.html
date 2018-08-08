@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>sphere and texture</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+  <link rel="stylesheet" media="all" href="../../css/style.css">
+</head>
+<body>
+  <a class="back-to-top" href="../index.html">back to top</a>
+  <script src="../../js/three.js"></script>
+  <script type="text/javascript">
+  let scene = new THREE.Scene();
+  let camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  let renderer = new THREE.WebGLRenderer({ alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+  let mesh;
+
+  let geometry = new THREE.SphereGeometry(40, 100, 100);
+  THREE.ImageUtils.crossOrigin = true;
+  let textureLoader = new THREE.TextureLoader();
+  textureLoader.crossOrigin = true;
+  textureLoader.load('../image/1.png', function(texture) {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(10, 10);
+    let material = new THREE.MeshLambertMaterial({ bumpMap: texture });
+    mesh = new THREE.Mesh(geometry, material); // meshをここで定義しちゃうと他で使えなくなっちゃうのでline:20で予め定義しておく
+    scene.add(mesh);
+
+    render();
+  });
+
+  let render = function() {
+    requestAnimationFrame(render);
+    mesh.rotation.x +=0.01;
+    renderer.render(scene, camera);
+  }
+
+  camera.position.z = 100;
+
+  var light = new THREE.DirectionalLight(0xFFFFFF, 1);
+  light.position.set(1, 0, 0);
+  scene.add(light);
+
+  var light = new THREE.DirectionalLight(0xFFFFFF, 1);
+  light.position.set(0, 1, 0);
+  scene.add(light);
+
+  var light = new THREE.DirectionalLight(0xFFFFFF, 1);
+  light.position.set(0, 0, 1);
+  scene.add(light);
+
+  </script>
+</body>
+</html>

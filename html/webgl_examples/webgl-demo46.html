@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>webgl-demo46</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/libs/minMatrixb.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+  </head>
+  <style media="screen">
+    #pane {
+      margin: auto;
+      max-width: 500px;
+    }
+    #canvas {
+      display: block;
+      margin: 10px auto;
+    }
+  </style>
+  <body>
+    <div id="pane">
+      <canvas id="canvas"></canvas>
+      <p>
+        <select id="select">
+          <option>depth of field</option>
+          <option>depth</option>
+          <option>scene</option>
+          <option>blur scene1</option>
+          <option>blur scene2</option>
+        </select>
+      </p>
+      <p><input id="range" type="range" value="50" min="10" max="100"> dispersion (1.0 - 10.0)</p>
+    </div>
+    <script id="main_vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec3 normal;
+    attribute vec4 color;
+    attribute vec2 texCoord;
+    uniform mat4 mvpMatrix;
+    uniform mat4 invMatrix;
+    uniform vec3 lightDirection;
+    uniform vec3 eyeDirection;
+    uniform vec4 ambientColor;
+    varying vec4 vColor;
+    varying vec2 vTexCoord;
+
+    void main() {
+      vec3 invLight = normalize(invMatrix * vec4(lightDirection, 0.0)).xyz;
+      vec3 invEye = normalize(invMatrix * vec4(eyeDirection, 0.0)).xyz;
+      vec3 halfLE = normalize(invLight + invEye);
+      float diffuse = clamp(dot(normal, invLight), 0.1, 1.0);
+      float specular = pow(clamp(dot(normal, halfLE), 0.0, 1.0), 50.0);
+      vec4 amb = color * ambientColor;
+      vColor = amb * vec4(vec3(diffuse), 1.0) + vec4(vec3(specular), 1.0);
+      vTexCoord = texCoord;
+      gl_Position = mvpMatrix * vec4(position, 1.0);
+    }
+    </script>
+
+    <script id="main_fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform sampler2D texture;
+    varying vec4 vColor;
+    varying vec2 vTexCoord;
+
+    void main() {
+      gl_FragColor = vColor * texture2D(texture, vTexCoord);
+    }
+    </script>
+
+    <script id="depthMap_vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    uniform mat4 mvpMatrix;
+
+    varying vec4 vPosition;
+
+    void main() {
+      vPosition = mvpMatrix * vec4(position, 1.0);
+      gl_Position = vPosition;
+    }
+    </script>
+
+    <script id="depthMap_fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform float depthOffset;
+    varying vec4 vPosition;
+
+    const float near = 0.1;
+    const float far = 30.0;
+    const float linerDepth = 1.0 / (far - near);
+
+    vec4 convRGBA(float depth){
+      float r = depth;
+      float g = fract(r * 255.0);
+      float b = fract(g * 255.0);
+      float a = fract(b * 255.0);
+      float coef = 1.0 / 255.0;
+      r -= g * coef;
+      g -= b * coef;
+      b -= a * coef;
+      return vec4(r, g, b, a);
+    }
+
+    float convCoord(float depth, float offset) {
+      float d = clamp(depth + offset, 0.0, 1.0);
+      if (d > 0.6) {
+        d = 2.5 * (1.0 - d);
+      } else if (d >= 0.4) {
+        d = 1.0;
+      } else {
+        d *= 2.5;
+      }
+      return d;
+    }
+
+    void main() {
+      float liner = linerDepth * length(vPosition);
+      vec4 convColor = convRGBA(convCoord(liner, depthOffset));
+      gl_FragColor = convColor;
+    }
+    </script>
+
+    <script id="gaussian_vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec2 texCoord;
+    uniform mat4 mvpMatrix;
+    varying vec2 vTexCoord;
+
+    void main() {
+      vTexCoord = texCoord;
+      gl_Position = mvpMatrix * vec4(position, 1.0);
+    }
+    </script>
+
+    <script id="gaussian_fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform sampler2D texture;
+    uniform bool gaussian;
+    uniform bool horizontal;
+    uniform float bufferWidth;
+    uniform float weight[10];
+    varying vec2 vTexCoord;
+
+    void main() {
+      float tFrag = 1.0 / bufferWidth;
+      vec2 fc;
+      vec3 destColor = vec3(0.0);
+
+      if (gaussian) {
+        if (horizontal) {
+          fc = vec2(gl_FragCoord.s, bufferWidth - gl_FragCoord.t);
+          destColor += texture2D(texture, (fc + vec2(-9.0, 0.0)) * tFrag).rgb * weight[9];
+          destColor += texture2D(texture, (fc + vec2(-8.0, 0.0)) * tFrag).rgb * weight[8];
+          destColor += texture2D(texture, (fc + vec2(-7.0, 0.0)) * tFrag).rgb * weight[7];
+          destColor += texture2D(texture, (fc + vec2(-6.0, 0.0)) * tFrag).rgb * weight[6];
+          destColor += texture2D(texture, (fc + vec2(-5.0, 0.0)) * tFrag).rgb * weight[5];
+          destColor += texture2D(texture, (fc + vec2(-4.0, 0.0)) * tFrag).rgb * weight[4];
+          destColor += texture2D(texture, (fc + vec2(-3.0, 0.0)) * tFrag).rgb * weight[3];
+          destColor += texture2D(texture, (fc + vec2(-2.0, 0.0)) * tFrag).rgb * weight[2];
+          destColor += texture2D(texture, (fc + vec2(-1.0, 0.0)) * tFrag).rgb * weight[1];
+          destColor += texture2D(texture, (fc + vec2( 0.0, 0.0)) * tFrag).rgb * weight[0];
+          destColor += texture2D(texture, (fc + vec2( 1.0, 0.0)) * tFrag).rgb * weight[1];
+          destColor += texture2D(texture, (fc + vec2( 2.0, 0.0)) * tFrag).rgb * weight[2];
+          destColor += texture2D(texture, (fc + vec2( 3.0, 0.0)) * tFrag).rgb * weight[3];
+          destColor += texture2D(texture, (fc + vec2( 4.0, 0.0)) * tFrag).rgb * weight[4];
+          destColor += texture2D(texture, (fc + vec2( 5.0, 0.0)) * tFrag).rgb * weight[5];
+          destColor += texture2D(texture, (fc + vec2( 6.0, 0.0)) * tFrag).rgb * weight[6];
+          destColor += texture2D(texture, (fc + vec2( 7.0, 0.0)) * tFrag).rgb * weight[7];
+          destColor += texture2D(texture, (fc + vec2( 8.0, 0.0)) * tFrag).rgb * weight[8];
+          destColor += texture2D(texture, (fc + vec2( 9.0, 0.0)) * tFrag).rgb * weight[9];
+        } else {
+          fc = gl_FragCoord.st;
+          destColor += texture2D(texture, (fc + vec2(0.0, -9.0)) * tFrag).rgb * weight[9];
+          destColor += texture2D(texture, (fc + vec2(0.0, -8.0)) * tFrag).rgb * weight[8];
+          destColor += texture2D(texture, (fc + vec2(0.0, -7.0)) * tFrag).rgb * weight[7];
+          destColor += texture2D(texture, (fc + vec2(0.0, -6.0)) * tFrag).rgb * weight[6];
+          destColor += texture2D(texture, (fc + vec2(0.0, -5.0)) * tFrag).rgb * weight[5];
+          destColor += texture2D(texture, (fc + vec2(0.0, -4.0)) * tFrag).rgb * weight[4];
+          destColor += texture2D(texture, (fc + vec2(0.0, -3.0)) * tFrag).rgb * weight[3];
+          destColor += texture2D(texture, (fc + vec2(0.0, -2.0)) * tFrag).rgb * weight[2];
+          destColor += texture2D(texture, (fc + vec2(0.0, -1.0)) * tFrag).rgb * weight[1];
+          destColor += texture2D(texture, (fc + vec2(0.0,  0.0)) * tFrag).rgb * weight[0];
+          destColor += texture2D(texture, (fc + vec2(0.0,  1.0)) * tFrag).rgb * weight[1];
+          destColor += texture2D(texture, (fc + vec2(0.0,  2.0)) * tFrag).rgb * weight[2];
+          destColor += texture2D(texture, (fc + vec2(0.0,  3.0)) * tFrag).rgb * weight[3];
+          destColor += texture2D(texture, (fc + vec2(0.0,  4.0)) * tFrag).rgb * weight[4];
+          destColor += texture2D(texture, (fc + vec2(0.0,  5.0)) * tFrag).rgb * weight[5];
+          destColor += texture2D(texture, (fc + vec2(0.0,  6.0)) * tFrag).rgb * weight[6];
+          destColor += texture2D(texture, (fc + vec2(0.0,  7.0)) * tFrag).rgb * weight[7];
+          destColor += texture2D(texture, (fc + vec2(0.0,  8.0)) * tFrag).rgb * weight[8];
+          destColor += texture2D(texture, (fc + vec2(0.0,  9.0)) * tFrag).rgb * weight[9];
+        }
+      } else {
+        destColor = texture2D(texture, vTexCoord).rgb;
+      }
+
+      gl_FragColor = vec4(destColor, 1.0);
+    }
+    </script>
+
+    <script id="final_vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec2 texCoord;
+    uniform mat4 mvpMatrix;
+    varying vec2 vTexCoord;
+
+    void main() {
+      vTexCoord = texCoord;
+      gl_Position = mvpMatrix * vec4(position, 1.0);
+    }
+    </script>
+
+    <script id="final_fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform sampler2D depthTexture;
+    uniform sampler2D sceneTexture;
+    uniform sampler2D blurTexture1;
+    uniform sampler2D blurTexture2;
+    uniform int result;
+    varying vec2 vTexCoord;
+
+    float restDepth(vec4 RGBA){
+      const float rMask = 1.0;
+      const float gMask = 1.0 / 255.0;
+      const float bMask = 1.0 / (255.0 * 255.0);
+      const float aMask = 1.0 / (255.0 * 255.0 * 255.0);
+      float depth = dot(RGBA, vec4(rMask, gMask, bMask, aMask));
+      return depth;
+    }
+
+    void main(){
+      float d = restDepth(texture2D(depthTexture, vec2(vTexCoord.s, 1.0 - vTexCoord.t)));
+      float coef = 1.0 - d;
+      float blur1Coef = coef * d;
+      float blur2Coef = coef * coef;
+      vec4 sceneColor = texture2D(sceneTexture, vec2(vTexCoord.s, 1.0 - vTexCoord.t));
+      vec4 blur1Color = texture2D(blurTexture1, vTexCoord);
+      vec4 blur2Color = texture2D(blurTexture2, vTexCoord);
+      vec4 destColor = sceneColor * d + blur1Color * blur1Coef + blur2Color * blur2Coef;
+      if (result == 0){
+        gl_FragColor = destColor;
+      } else if (result == 1){
+        gl_FragColor = vec4(vec3(d), 1.0);
+      } else if (result == 2){
+        gl_FragColor = sceneColor;
+      } else if (result == 3){
+        gl_FragColor = blur1Color;
+      } else {
+        gl_FragColor = blur2Color;
+      }
+    }
+    </script>
+
+    <script type="text/javascript">
+    // canvas とクォータニオンをグローバルに扱う
+    var canvas;
+    var q = new qtnIV();
+    var qt = q.identity(q.create());
+
+    // マウスムーブイベントに登録する処理
+    function mouseMove(e){
+      var cw = canvas.width;
+      var ch = canvas.height;
+      var wh = 1 / Math.sqrt(cw * cw + ch * ch);
+      var x = e.clientX - canvas.offsetLeft - cw * 0.5;
+      var y = e.clientY - canvas.offsetTop - ch * 0.5;
+      var sq = Math.sqrt(x * x + y * y);
+      var r = sq * 0.13 * Math.PI * wh;
+      if(sq != 1){
+        sq = 1 / sq;
+        x *= sq;
+        y *= sq;
+      }
+      q.rotate(r, [y, x, 0.0], qt);
+    }
+
+    window.onload = function() {
+      canvas = document.getElementById("canvas");
+      canvas.width = 512; canvas.height = 512;
+
+      // イベント処理
+      canvas.addEventListener('mousemove', mouseMove, true);
+
+      // webglコンテキストを取得
+      var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+
+      // エレメントへの参照を取得
+      var eSelect = document.getElementById("select");
+      var eRange = document.getElementById("range");
+
+      // シーンをレンダリングするメインシェーダ
+      var prg = create_program(create_shader("main_vs"), create_shader("main_fs"));
+      var attLocation = [];
+      attLocation[0] = gl.getAttribLocation(prg, "position");
+      attLocation[1] = gl.getAttribLocation(prg, "normal");
+      attLocation[2] = gl.getAttribLocation(prg, "color");
+      attLocation[3] = gl.getAttribLocation(prg, "texCoord");
+      var attStride = [];
+      attStride[0] = 3;
+      attStride[1] = 3;
+      attStride[2] = 4;
+      attStride[3] = 2;
+      var uniLocation = [];
+      uniLocation[0] = gl.getUniformLocation(prg, "mvpMatrix");
+      uniLocation[1] = gl.getUniformLocation(prg, "invMatrix");
+      uniLocation[2] = gl.getUniformLocation(prg, "lightDirection");
+      uniLocation[3] = gl.getUniformLocation(prg, "eyeDirection");
+      uniLocation[4] = gl.getUniformLocation(prg, "ambientColor");
+      uniLocation[5] = gl.getUniformLocation(prg, "texture");
+
+      // 深度をレンダリングするシェーダ
+      var dPrg = create_program(create_shader("depthMap_vs"), create_shader("depthMap_fs"));
+      var dAttLocation = [];
+      dAttLocation[0] = gl.getAttribLocation(dPrg, "position");
+      var dAttStride = [];
+      dAttStride[0] = 3;
+      var dUniLocation = [];
+      dUniLocation[0] = gl.getUniformLocation(dPrg, "mvpMatrix");
+      dUniLocation[1] = gl.getUniformLocation(dPrg, "depthOffset");
+
+      // 正射影で板ポリゴンをgaussianフィルタでレンダリングするシェーダ
+      var gPrg = create_program(create_shader("gaussian_vs"), create_shader("gaussian_fs"));
+      var gAttLocation = [];
+      gAttLocation[0] = gl.getAttribLocation(gPrg, "position");
+      gAttLocation[1] = gl.getAttribLocation(gPrg, "texCoord");
+      var gAttStride = [];
+      gAttStride[0] = 3;
+      gAttStride[1] = 2;
+      var gUniLocation = [];
+      gUniLocation[0] = gl.getUniformLocation(gPrg, "mvpMatrix");
+      gUniLocation[1] = gl.getUniformLocation(gPrg, "texture");
+      gUniLocation[2] = gl.getUniformLocation(gPrg, "gaussian");
+      gUniLocation[3] = gl.getUniformLocation(gPrg, "horizontal");
+      gUniLocation[4] = gl.getUniformLocation(gPrg, "bufferWidth");
+      gUniLocation[5] = gl.getUniformLocation(gPrg, "weight");
+
+      // 正射影でレンダリング結果を合成するシェーダ
+      var fPrg = create_program(create_shader("final_vs"), create_shader("final_fs"));
+      var fAttLocation = [];
+      fAttLocation[0] = gl.getAttribLocation(fPrg, "position");
+      fAttLocation[1] = gl.getAttribLocation(fPrg, "texCoord");
+      var fAttStride = [];
+      fAttStride[0] = 3;
+      fAttStride[1] = 2;
+      var fUniLocation = [];
+      fUniLocation[0] = gl.getUniformLocation(fPrg, "mvpMatrix");
+      fUniLocation[1] = gl.getUniformLocation(fPrg, "depthTexture");
+      fUniLocation[2] = gl.getUniformLocation(fPrg, "sceneTexture");
+      fUniLocation[3] = gl.getUniformLocation(fPrg, "blurTexture1");
+      fUniLocation[4] = gl.getUniformLocation(fPrg, "blurTexture2");
+      fUniLocation[5] = gl.getUniformLocation(fPrg, "result");
+
+      // トーラスの頂点データ生成
+      var torusData     = torus(64.0, 64.0, 0.3, 0.7, [1.0, 1.0, 1.0, 1.0]);
+      var tPosition     = create_vbo(torusData.p);
+      var tNormal       = create_vbo(torusData.n);
+      var tColor        = create_vbo(torusData.c);
+      var tTexCoord     = create_vbo(torusData.t);
+      var tVBOList      = [tPosition, tNormal, tColor, tTexCoord];
+      var dtVBOList     = [tPosition];
+      var tIndex        = create_ibo(torusData.i);
+
+      // キューブの頂点データ生成
+      var cubeData     = cube(2.0, [1.0, 1.0, 1.0, 1.0]);
+      var cPosition     = create_vbo(cubeData.p);
+      var cNormal       = create_vbo(cubeData.n);
+      var cColor        = create_vbo(cubeData.c);
+      var cTexCoord     = create_vbo(cubeData.t);
+      var cVBOList      = [cPosition, cNormal, cColor, cTexCoord];
+      var dcVBOList     = [cPosition];
+      var cIndex        = create_ibo(cubeData.i);
+
+      // 板ポリゴン
+      var position = [
+        -1.0,  1.0,  0.0,
+         1.0,  1.0,  0.0,
+        -1.0, -1.0,  0.0,
+         1.0, -1.0,  0.0
+      ];
+      var texCoord = [
+        0.0, 0.0,
+        1.0, 0.0,
+        0.0, 1.0,
+        1.0, 1.0
+      ];
+      var index = [
+        0, 2, 1,
+        2, 3, 1
+      ];
+      var vPosition = create_vbo(position);
+      var vTexCoord = create_vbo(texCoord);
+      var vVBOList  = [vPosition, vTexCoord];
+      var vIndex    = create_ibo(index);
+
+      // 各種座標変換行列の初期化
+      var m = new matIV();
+      var mMatrix    = m.identity(m.create());
+      var vMatrix    = m.identity(m.create());
+      var pMatrix    = m.identity(m.create());
+      var tmpMatrix  = m.identity(m.create());
+      var oTmpMatrix = m.identity(m.create());
+      var mvpMatrix  = m.identity(m.create());
+      var invMatrix  = m.identity(m.create());
+
+      // 深度テストとカリングを有効にする
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LEQUAL);
+      gl.enable(gl.CULL_FACE);
+
+      // ライトの向き
+      var lightDirection = [-0.577, 0.577, 0.577];
+
+      // フレームバッファオブジェクトの取得
+      var fBufferWidth  = 512;
+      var fBufferHeight = 512;
+      var fBufferDepth = create_framebuffer(fBufferWidth, fBufferHeight);
+      var fBufferScene = create_framebuffer(fBufferWidth, fBufferHeight);
+      var fBufferBlurScene1 = create_framebuffer(fBufferWidth, fBufferHeight);
+      var fBufferBlurScene2 = create_framebuffer(fBufferWidth, fBufferHeight);
+      var fBufferBlurTemp   = create_framebuffer(fBufferWidth, fBufferHeight);
+
+      var texture1 = create_texture("texture1.png", 1);
+
+      // gaussianフィルタの重み係数を算出
+      var weight1 = gaussian_weight(10, 15.0);
+      var weight2 = gaussian_weight(10, 45.0);
+
+      // カウンタの宣言
+      var count = 0;
+      var count2 = 0;
+
+      (function() {
+        // カウンタをインクリメントする
+        count++;
+        if (count % 2 > 0) { count2 ++ };
+
+        // カウンタを元にラジアンを算出
+        var rad = new Array();
+        for (var i = 0; i < 9; i++){
+          rad[i] = ((count + 40 * i) % 360) * Math.PI / 180;
+        }
+
+        // ビュー×プロジェクション座標変換行列
+        var camUpDirection = []; var eyePosition = [];
+        q.toVecIII([2.0, 0.0, 10.0], qt, eyePosition);
+        q.toVecIII([0.0, 1.0, 0.0], qt, camUpDirection);
+        m.lookAt(eyePosition, [0, 0, 0], camUpDirection, vMatrix);
+        m.perspective(90, canvas.width / canvas.height, 0.1, 30, pMatrix);
+        m.multiply(pMatrix, vMatrix, tmpMatrix);
+
+        // 正射影用の座標変換行列
+        m.lookAt([0.0, 0.0, 0.5], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], vMatrix);
+        m.ortho(-1.0, 1.0, 1.0, -1.0, 0.1, 1, pMatrix);
+        m.multiply(pMatrix, vMatrix, oTmpMatrix);
+
+        /* --------------------- フレームバッファへの描き込み（シーン） --------------------- */
+
+        // プログラムオブジェクトの選択
+        gl.useProgram(prg);
+
+        // フレームバッファのバインド
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fBufferScene.f);
+
+        // フレームバッファを初期化
+        gl.clearColor(0.0, 0.0, 1.0, 1.0);
+        gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // テクスチャのバインド
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture1);
+
+        // シーンをレンダリング(キューブ)
+        gl.cullFace(gl.FRONT);
+        set_attribute(cVBOList, attLocation, attStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cIndex);
+        m.identity(mMatrix);
+        m.scale(mMatrix, [3.5, 2.5, 10.0], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+        m.inverse(mMatrix, invMatrix);
+        gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+        gl.uniformMatrix4fv(uniLocation[1], false, invMatrix);
+        gl.uniform3fv(uniLocation[2], lightDirection);
+        gl.uniform3fv(uniLocation[3], [0.0, 0.0, 10.0]);
+        gl.uniform4fv(uniLocation[4], [1.0, 1.0, 1.0, 1.0]);
+        gl.uniform1i(uniLocation[5], 0);
+        gl.drawElements(gl.TRIANGLES, cubeData.i.length, gl.UNSIGNED_SHORT, 0);
+
+        // シーンをレンダリング(トーラス)
+        gl.cullFace(gl.BACK);
+        set_attribute(tVBOList, attLocation, attStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tIndex);
+        for (i = 0; i < 9; i++) {
+          var amb = hsva(i * 40, 1, 1, 1);
+          m.identity(mMatrix);
+          m.translate(mMatrix, [0.0 + 0.2 * i, 0.0, 8.8 - 2.2 * i], mMatrix);
+          m.rotate(mMatrix, rad[i], [1, 1, 0], mMatrix);
+          m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+          m.inverse(mMatrix, invMatrix);
+          gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+          gl.uniformMatrix4fv(uniLocation[1], false, invMatrix);
+          gl.uniform3fv(uniLocation[2], lightDirection);
+          gl.uniform3fv(uniLocation[3], eyePosition);
+          gl.uniform4fv(uniLocation[4], amb);
+          gl.uniform1i(uniLocation[5], 0);
+          gl.drawElements(gl.TRIANGLES, torusData.i.length, gl.UNSIGNED_SHORT, 0);
+        }
+
+
+        /* --------------------- フレームバッファへの描き込み（gaussianフィルタ） --------------------- */
+
+        // gaussianフィルタの重みweight1
+        // 1) ぼけていないシーンをテクスチャにhorizontalありのぼかしを入れる
+        // プログラムオブジェクトの選択
+        gl.useProgram(gPrg);
+
+        // フレームバッファのバインドを変更
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fBufferBlurTemp.f);
+
+        // フレームバッファを初期化
+        gl.clearColor(0.0, 0.0, 1.0, 1.0);
+        gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // テクスチャのバインド（ぼけていないシーンをテクスチャとしてバインド）
+        gl.bindTexture(gl.TEXTURE_2D, fBufferScene.t);
+
+        // 板ポリゴンのレンダリング
+        set_attribute(vVBOList, gAttLocation, gAttStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vIndex);
+        gl.uniformMatrix4fv(gUniLocation[0], false, oTmpMatrix);
+        gl.uniform1i(gUniLocation[1], 0);
+        gl.uniform1i(gUniLocation[2], true);
+        gl.uniform1i(gUniLocation[3], true);
+        gl.uniform1f(gUniLocation[4], fBufferWidth);
+        gl.uniform1fv(gUniLocation[5], weight1);
+        gl.drawElements(gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0);
+
+
+        // 2) horizontalありのぼかしを入れたシーンにhorizontalなしのぼかしを入れる
+        // フレームバッファのバインドを変更
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fBufferBlurScene1.f);
+
+        // フレームバッファを初期化
+        gl.clearColor(0.0, 0.0, 1.0, 1.0);
+        gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // テクスチャのバインド
+        gl.bindTexture(gl.TEXTURE_2D, fBufferBlurTemp.t);
+
+        // 板ポリゴンのレンダリング
+        set_attribute(vVBOList, gAttLocation, gAttStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vIndex);
+        gl.uniformMatrix4fv(gUniLocation[0], false, oTmpMatrix);
+        gl.uniform1i(gUniLocation[1], 0);
+        gl.uniform1i(gUniLocation[2], true);
+        gl.uniform1i(gUniLocation[3], false);
+        gl.uniform1f(gUniLocation[4], fBufferWidth);
+        gl.uniform1fv(gUniLocation[5], weight1);
+        gl.drawElements(gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0);
+
+
+        // gaussianフィルタの重みweight2
+        // 1) ぼけていないシーンをテクスチャにhorizontalありのぼかしを入れる
+
+        // フレームバッファのバインドを変更
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fBufferBlurTemp.f);
+
+        // フレームバッファを初期化
+        gl.clearColor(0.0, 0.0, 1.0, 1.0);
+        gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // テクスチャのバインド（ぼけていないシーンをテクスチャとしてバインド）
+        gl.bindTexture(gl.TEXTURE_2D, fBufferScene.t);
+
+        // 板ポリゴンのレンダリング
+        set_attribute(vVBOList, gAttLocation, gAttStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vIndex);
+        gl.uniformMatrix4fv(gUniLocation[0], false, oTmpMatrix);
+        gl.uniform1i(gUniLocation[1], 0);
+        gl.uniform1i(gUniLocation[2], true);
+        gl.uniform1i(gUniLocation[3], true);
+        gl.uniform1f(gUniLocation[4], fBufferWidth);
+        gl.uniform1fv(gUniLocation[5], weight2);
+        gl.drawElements(gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0);
+
+
+        // 2) horizontalありのぼかしを入れたシーンにhorizontalなしのぼかしを入れる
+        // フレームバッファのバインドを変更
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fBufferBlurScene2.f);
+
+        // フレームバッファを初期化
+        gl.clearColor(0.0, 0.0, 1.0, 1.0);
+        gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // テクスチャのバインド
+        gl.bindTexture(gl.TEXTURE_2D, fBufferBlurTemp.t);
+
+        // 板ポリゴンのレンダリング
+        set_attribute(vVBOList, gAttLocation, gAttStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vIndex);
+        gl.uniformMatrix4fv(gUniLocation[0], false, oTmpMatrix);
+        gl.uniform1i(gUniLocation[1], 0);
+        gl.uniform1i(gUniLocation[2], true);
+        gl.uniform1i(gUniLocation[3], false);
+        gl.uniform1f(gUniLocation[4], fBufferWidth);
+        gl.uniform1fv(gUniLocation[5], weight2);
+        gl.drawElements(gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0);
+
+        /* --------------------- フォーカスする深度値をエレメントから取得 --------------------- */
+
+        var depthOffset = eRange.value * 0.01 - 0.5;
+        depthOffset *= 0.85;
+
+        // プログラムオブジェクトの選択
+        gl.useProgram(dPrg);
+
+        // フレームバッファのバインド
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fBufferDepth.f);
+
+        // フレームバッファを初期化
+        gl.clearColor(1.0, 1.0, 1.0, 1.0);
+        gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // 深度をレンダリング(キューブ)
+        gl.cullFace(gl.FRONT);
+        set_attribute(dcVBOList, dAttLocation, dAttStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cIndex);
+        m.identity(mMatrix);
+        m.scale(mMatrix, [3.5, 2.5, 10.0], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+        gl.uniformMatrix4fv(dUniLocation[0], false, mvpMatrix);
+        gl.uniform1f(dUniLocation[1], depthOffset);
+        gl.drawElements(gl.TRIANGLES, cubeData.i.length, gl.UNSIGNED_SHORT, 0);
+
+        // 深度をレンダリング(トーラス)
+        gl.cullFace(gl.BACK);
+        set_attribute(dtVBOList, dAttLocation, dAttStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tIndex);
+        for (i = 0; i < 9; i++) {
+          m.identity(mMatrix);
+          m.translate(mMatrix, [0.0 + 0.2 * i, 0.0, 8.8 - 2.2 * i], mMatrix);
+          m.rotate(mMatrix, rad[i], [1, 1, 0], mMatrix);
+          m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+          gl.uniformMatrix4fv(dUniLocation[0], false, mvpMatrix);
+          gl.uniform1f(dUniLocation[1], depthOffset);
+          gl.drawElements(gl.TRIANGLES, torusData.i.length, gl.UNSIGNED_SHORT, 0);
+        }
+
+
+        /* --------------------- 最終レンダリング結果をエレメントから取得し選択できるようにする --------------------- */
+        var result = eSelect.selectedIndex;
+
+        // フレームバッファのバインドを解除
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        // テクスチャのバインド
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, fBufferDepth.t);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, fBufferScene.t);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, fBufferBlurScene1.t);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, fBufferBlurScene2.t);
+
+        // canvasを初期化
+        gl.clearColor(0.0, 0.0, 1.0, 1.0);
+        gl.clearDepth(1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // プログラムオブジェクトの選択
+        gl.useProgram(fPrg);
+
+        // 板ポリゴンのレンダリング
+        set_attribute(vVBOList, fAttLocation, fAttStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vIndex);
+        gl.uniformMatrix4fv(fUniLocation[0], false, oTmpMatrix);
+        gl.uniform1i(fUniLocation[1], 0);
+        gl.uniform1i(fUniLocation[2], 1);
+        gl.uniform1i(fUniLocation[3], 2);
+        gl.uniform1i(fUniLocation[4], 3);
+        gl.uniform1i(fUniLocation[5], result);
+        gl.drawElements(gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0);
+
+        gl.flush();
+        setTimeout(arguments.callee, 1000 / 30);
+
+      })();
+
+      // create WebGLShader object
+      function create_shader(id) {
+        var shader;
+        var scriptElement = document.getElementById(id);
+        if (!scriptElement) { return };
+        switch (scriptElement.type) {
+          case 'x-shader/x-vertex':
+            shader = gl.createShader(gl.VERTEX_SHADER);
+            break;
+          case 'x-shader/x-fragment':
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+            break;
+          default:
+            return;
+        };
+
+        gl.shaderSource(shader, scriptElement.text);
+        gl.compileShader(shader);
+        if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          return shader;
+        } else {
+          alert(gl.getShaderInfoLog(shader));
+        }
+      };
+
+      // create WebGLProgram object
+      function create_program(vs, fs) {
+        var program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+
+        gl.linkProgram(program);
+
+        if (gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          gl.useProgram(program);
+          return program;
+        } else {
+          alert(gl.getProgramInfoLog(program));
+          console.log(gl.getProgramInfoLog(program));
+        }
+      };
+
+
+      // create WebGLBuffer for vertex
+      function create_vbo(data) {
+        var vbo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        return vbo;
+      };
+
+      function set_attribute(vbo, attL, attS) {
+        for (var i in vbo) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, vbo[ i ]);
+          gl.enableVertexAttribArray(attL[ i ]);
+          gl.vertexAttribPointer(attL[ i ], attS[ i ], gl.FLOAT, false, 0, 0);
+        }
+      };
+
+      // create WebGLBuffer for index
+      function create_ibo(data) {
+        var ibo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Int16Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        return ibo;
+      };
+
+      // テクスチャを生成する関数
+      function create_texture(source, number){
+        // イメージオブジェクトの生成
+        var img = new Image();
+
+        // データのオンロードをトリガーにする
+        img.onload = function(){
+          // テクスチャオブジェクトの生成
+          var tex = gl.createTexture();
+
+          // テクスチャをバインドする
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+
+          // テクスチャへイメージを適用
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+          // ミップマップを生成
+          gl.generateMipmap(gl.TEXTURE_2D);
+
+          // テクスチャパラメータの設定
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+          // 生成したテクスチャを変数に代入
+          switch(number){
+            case 1:
+              texture1 = tex;
+              break;
+            case 2:
+              texture2 = tex;
+              break;
+            default :
+              break;
+          }
+
+          // テクスチャのバインドを無効化
+          gl.bindTexture(gl.TEXTURE_2D, null);
+        };
+
+        // イメージオブジェクトのソースを指定
+        img.src = source;
+      }
+
+      function create_framebuffer(width, height) {
+        var frameBuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+
+        var depthRenderBuffer = gl.createRenderbuffer();
+        gl.bindRenderbuffer(gl.RENDERBUFFER, depthRenderBuffer);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthRenderBuffer);
+
+        var fTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, fTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fTexture, 0);
+
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        return {f: frameBuffer, d: depthRenderBuffer, t: fTexture};
+      };
+
+      function gaussian_weight(cnt, dis) {
+        var weight = new Array(cnt);
+        var t = 0.0;
+        var d = dis * dis / 10;
+        for (var i = 0; i < weight.length; i++) {
+          var r = 1.0 + 2.0 * i;
+          var w = Math.exp(-0.5 * (r * r) / d);
+          weight[i] = w;
+          if (i > 0) {w *= 2.0;}
+          t += w;
+        }
+        for (i = 0; i < weight.length; i++) {
+          weight[i] /= t;
+        }
+        return weight;
+      };
+
+    };
+
+    </script>
+  </body>
+</html>

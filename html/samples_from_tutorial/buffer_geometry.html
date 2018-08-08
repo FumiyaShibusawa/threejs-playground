@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>drawing a line | threejs</title>
+    <link rel="stylesheet" media="all" href="../../css/style.css">
+  </head>
+  <body>
+    <a class="back-to-top" href="../index.html">back to top</a>
+    <div id="ratio">
+      <span id="x-axis"></span>
+      <span id="y-axis"></span>
+      <span id="z-axis"></span>
+    </div>
+    <script src="../../js/three.js"></script>
+    <script>
+      // 箱の生成
+      var renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // カメラの生成
+      var camera  = new THREE.PerspectiveCamera(30, window.innerWidth / innerHeight, 1, 500);
+      camera.position.set(0, 0, 100);
+      camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+      // シーン
+      var scene = new THREE.Scene();
+
+
+      MAX_POINTS = 2;
+      // geometry
+      var geometry = new THREE.BufferGeometry();
+
+      // attribute
+      var positions = new Float32Array(MAX_POINTS * 3); // 3 vetices per point
+      geometry.addAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      // draw range
+      var drawCount = 2; // draw the first 2 points, only
+      geometry.setDrawRange(0, drawCount);
+
+      //material
+      var material = new THREE.LineBasicMaterial({color: 0x00ff00, linewidth: 2});
+
+      // line
+      var line = new THREE.Line(geometry, material);
+      scene.add(line);
+
+      var positions = line.geometry.attributes.position.array;
+
+      var x, y, z, index;
+      x = y = z = index = 0;
+
+      for ( var i = 0, l = MAX_POINTS; i < l; i ++ ) {
+        positions[ index ++ ] = x;
+        positions[ index ++ ] = y;
+        positions[ index ++ ] = z;
+
+        x += (Math.random() - 0.5) * 30.0;
+        y += (Math.random() - 0.5) * 30.0;
+        z += (Math.random() - 0.5) * 30.0;
+
+        document.getElementById('x-axis').innerHTML = "x: " + x;
+        document.getElementById('y-axis').innerHTML = "y: " + y;
+        document.getElementById('z-axis').innerHTML = "z: " + z;
+      }
+
+      var animate = function () {
+        requestAnimationFrame( animate );
+
+        line.rotation.x += 0.1;
+        line.rotation.y += 0.1;
+
+        renderer.render(scene, camera);
+      };
+      window.onload = animate;
+      // window.onclick = animate;
+
+
+      // renderer.render(scene, camera);
+    </script>
+  </body>
+</html>

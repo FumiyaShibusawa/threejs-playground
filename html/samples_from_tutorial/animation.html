@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>animation</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+  <link rel="stylesheet" media="all" href="../../css/style.css">
+</head>
+<body>
+  <a class="back-to-top" href="../index.html">back to top</a>
+  <script src="../../js/three.js"></script>
+  <script src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/53148/TweenLite.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.18.4/easing/EasePack.min.js"></script>
+  <script type="text/javascript">
+
+  let colors = [];
+  let scene, camera, renderer, geometry, material, mesh;
+  let verticePositions = [];
+
+  function initScene() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+    camera.position.z = 100;
+  };
+
+  function initLight() {
+    var light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 1, 0);
+    scene.add(light);
+
+    var light = new THREE.DirectionalLight(0xffffff, 0.5);
+    light.position.set(0, -1, 0);
+    scene.add(light);
+
+    var light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(1, 0, 0);
+    scene.add(light);
+
+    var light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(-1, 0, 0);
+    scene.add(light);
+
+    var light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 0, 1);
+    scene.add(light);
+
+    var light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 0, -1);
+    scene.add(light);
+  };
+
+  function initGeometry() {
+    geometry = new THREE.IcosahedronGeometry(20);
+    for (var i = 0; i < geometry.faces.length; i++) {
+      var face = geometry.faces[i];
+      face.color.setHex(getRandomColorOneline());
+    }
+    material = new THREE.MeshBasicMaterial({ vertexColors: THREE.FaceColors });
+    mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+  };
+
+  function render(time) {
+    requestAnimationFrame(render);
+    renderer.render(scene, camera);
+    geometry.verticesNeedUpdate = true;
+    geometry.elementsNeedUpdate = true; // レンダリングするごとにtrueにしないと面に色が更新されない
+  };
+
+  // アニメーションさせる頂点を取得して配列（verticePositions）に格納
+  function getOriginalVerticePositions() {
+    for (var i = 0, l = geometry.vertices.length; i < l; i++) {
+      verticePositions.push({ x: geometry.vertices[i].x, y: geometry.vertices[i].y });
+    }
+  };
+
+  // 格納した配列（verticePositions）に移動先の頂点の値を代入
+  function getNewVertices() {
+    let newVertices = [];
+    for (var i = 0, l = geometry.vertices.length; i < l; i++) {
+      newVertices[i] = {
+        x: verticePositions[i].x - 5 + Math.random() * 10,
+        y: verticePositions[i].y - 5 + Math.random() * 10
+      }
+    }
+    return newVertices;
+  };
+
+  // 新しい移動先の頂点をアニメーションを使って代入 & 面の色を変化
+  function tweenIcosahedron() {
+    var newVerticePositions = getNewVertices();
+    for (var i = 0, l = geometry.vertices.length; i < l; i++) {
+      tweenVertice(i, newVerticePositions);
+    };
+    tweenAxis();
+    changeFaceGeometry();
+  };
+
+  // TweenLiteというライブラリを使って頂点の移動をアニメーション
+  function tweenVertice(i, newVerticePositions) {
+    TweenLite.to(geometry.vertices[i], 1, {
+      x: newVerticePositions[i].x,
+      y: newVerticePositions[i].y,
+      ease: Back.easeInOut,
+      onComplete: function() {
+      if (i === 0) tweenIcosahedron;
+    }});
+  };
+
+  // オブジェクトの回転アニメーション
+  function tweenAxis() {
+    var rotation = { x: Math.random() * 3, y: Math.random() * 3, z: Math.random() * 3 };
+    TweenLite.to(mesh.rotation, 1, {
+       x: rotation.x,
+       y: rotation.y,
+       z: rotation.z,
+       ease: Back.easeInOut,
+       onComplete: tweenIcosahedron
+    });
+  };
+
+  // ウィンドウをリサイズしたらオブジェクトのサイズを再調整
+  function resize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  };
+
+  initScene();
+  initLight();
+  initGeometry();
+  resize();
+  getOriginalVerticePositions();
+  render();
+  window.addEventListener("resize", resize);
+
+  tweenIcosahedron();
+
+  // geometryの持つ面の色を変更
+  function changeFaceGeometry() {
+    for (var i = 0, l = geometry.faces.length; i < l; i++) {
+      geometry.faces[i].color.setHex(getRandomColor());
+    };
+  };
+
+
+  // ランダムに色を生成 ※どちらの関数でも可
+  function getRandomColorOneline() {
+    return '0x' + Math.floor(Math.random() * 16777215).toString(16);
+  }
+
+  function getRandomColor() {
+    var letters = '0123456789ABCDEF';
+    var color = '0x';
+    for (var i = 0; i < 6; i++) {
+      color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+  }
+
+  </script>
+</body>
+</html>

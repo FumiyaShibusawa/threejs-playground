@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>webgl-demo78</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/libs/minMatrixb.js"></script>
+    <script src="../../node_modules/ccapture.js/build/CCapture.all.min.js"></script>
+  </head>
+  <style media="screen">
+    #pane {
+      margin: auto;
+      /*max-width: 512px;*/
+    }
+    #canvas {
+      display: block;
+      margin: 10px auto;
+    }
+  </style>
+  <body>
+    <div id="pane">
+      <canvas id="canvas"></canvas>
+      <p>
+        <select id="select">
+          <option value="0">texture 0</option>
+          <option value="1">texture 1</option>
+          <option value="2">texture 2</option>
+          <option value="3">texture 3</option>
+          <option value="4">texture 4</option>
+          <option value="5">texture 5</option>
+          <option value="6">texture 6</option>
+          <option value="7">texture 7</option>
+          <option value="8">texture 8</option>
+        </select>
+      </p>
+    </div>
+    <script id="vs" type="x-shader/x-vertex">
+    attribute vec3 position;
+    attribute vec3 normal;
+    uniform mat4 mvpMatrix;
+    uniform mat4 normalMatrix;
+    varying vec3 vNormal;
+
+    void main(){
+      vNormal = normalize((normalMatrix * vec4(normal, 0.0)).xyz);
+      gl_Position = mvpMatrix * vec4(position, 1.0);
+    }
+    </script>
+
+    <script id="fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform sampler2D texture;
+    varying vec3 vNormal;
+
+    void main(){
+      vec2 texCoord = (vNormal.xy + 1.0) / 2.0;
+      vec4 smpColor = texture2D(texture, vec2(texCoord.s, 1.0 - texCoord.t));
+      gl_FragColor = smpColor;
+    }
+    </script>
+
+
+    <script type="text/javascript">
+    // canvas とクォータニオンをグローバルに扱う
+    var canvas;
+    var q = new qtnIV();
+    var qt = q.identity(q.create());
+    var run = true;
+
+    // マウスムーブイベントに登録する処理
+    function mouseMove(e){
+    	var cw = canvas.width;
+    	var ch = canvas.height;
+    	var wh = 1 / Math.sqrt(cw * cw + ch * ch);
+    	var x = e.clientX - canvas.offsetLeft - cw * 0.5;
+    	var y = e.clientY - canvas.offsetTop - ch * 0.5;
+    	var sq = Math.sqrt(x * x + y * y);
+    	var r = sq * 2.0 * Math.PI * wh;
+    	if(sq != 1){
+    		sq = 1 / sq;
+    		x *= sq;
+    		y *= sq;
+    	}
+    	q.rotate(r, [y, x, 0.0], qt);
+    };
+
+    window.onload = function(){
+      // カウンタの宣言
+      var count = 0;
+      // canvasエレメントを取得
+      canvas = document.getElementById('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+
+      // イベント登録
+      canvas.addEventListener('mousemove', mouseMove, true);
+      window.addEventListener('keydown', function(e){
+        run = e.keyCode !== 27;
+      }, false);
+
+      // select エレメント
+      var sel = document.getElementById('select');
+      sel.selectedIndex = 0;
+
+      // webglコンテキストを取得
+      var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+      // テクスチャ関連
+      var textures = [];
+      (function(){
+        var i;
+        for(i = 0; i < 8; i++){
+          create_texture('matcap' + i + '.jpg', i);
+        }
+        setTimeout(loadCheck, 100);
+        function loadCheck(){
+          var j;
+          var f = true;
+          for(j = 0; j < 8; j++){
+            f = f && (textures[j]);
+          }
+          if(f){
+            init();
+          }else{
+            setTimeout(loadCheck, 100);
+          }
+        }
+      })();
+
+      // WebGL関連の初期化処理
+      function init(){
+        // シェーダの準備と各種ロケーションの取得
+        var prg = create_program(create_shader('vs'), create_shader('fs'));
+        // attributeLocationを配列に取得
+        var attLocation = [];
+        attLocation[0] = gl.getAttribLocation(prg, 'position');
+        attLocation[1] = gl.getAttribLocation(prg, 'normal');
+        var attStride = [];
+        attStride[0] = 3;
+        attStride[1] = 3;
+        var uniLocation = [];
+        uniLocation[0] = gl.getUniformLocation(prg, 'mvpMatrix');
+        uniLocation[1] = gl.getUniformLocation(prg, 'normalMatrix');
+        uniLocation[2] = gl.getUniformLocation(prg, 'texture');
+
+        // 球体モデル
+        var sphereData    = sphere(32, 32, 1.0);
+        var sPosition     = create_vbo(sphereData.p);
+        var sNormal       = create_vbo(sphereData.n);
+        var sVBOList      = [sPosition, sNormal];
+        var sIndex        = create_ibo(sphereData.i);
+
+        // トーラスモデル
+        var torusData     = torus(64, 64, 0.7, 2.0);
+        var tPosition     = create_vbo(torusData.p);
+        var tNormal       = create_vbo(torusData.n);
+        var tVBOList      = [tPosition, tNormal];
+        var tIndex        = create_ibo(torusData.i);
+
+        // 各種行列の生成と初期化
+        var m = new matIV();
+        var mMatrix = m.identity(m.create());
+        var vMatrix = m.identity(m.create());
+        var pMatrix = m.identity(m.create());
+        var tmpMatrix = m.identity(m.create());
+        var mvMatrix = m.identity(m.create());
+        var mvpMatrix = m.identity(m.create());
+        var invMatrix = m.identity(m.create());
+        var normalMatrix = m.identity(m.create());
+
+        // 深度テストとカリングを有効にする
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.LEQUAL);
+        gl.enable(gl.CULL_FACE);
+
+        // 背景の初期化設定
+        gl.clearColor(0.3, 0.7, 0.7, 1.0);
+        gl.clearDepth(1.0);
+
+        render();
+
+        function render(){
+          var i;
+
+          // カウンタをインクリメントする
+          count++;
+
+          // カウンタを元にラジアンを算出
+          var rad = (count % 360) * Math.PI / 180;
+
+          // select エレメントの値を取得
+          var selValue = parseInt(sel.value, 10);
+
+          // 取得した値からテクスチャバインドを選択
+          gl.bindTexture(gl.TEXTURE_2D, textures[selValue]);
+
+          // canvas を初期化
+          gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+          // ビュー×プロジェクション座標変換行列
+          var eyePosition = [];
+          var camUpDirection = [];
+          q.toVecIII([0.0, 0.0, 10.0], qt, eyePosition);
+          q.toVecIII([0.0, 1.0,  0.0], qt, camUpDirection);
+          m.lookAt(eyePosition, [0, 0, 0], camUpDirection, vMatrix);
+          m.perspective(45, canvas.width / canvas.height, 0.1, 20.0, pMatrix);
+          m.multiply(pMatrix, vMatrix, tmpMatrix);
+
+          // 球体をレンダリング
+          set_attribute(sVBOList, attLocation, attStride);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIndex);
+          m.identity(mMatrix);
+          m.translate(mMatrix, [0.0, Math.sin(rad), 0.0], mMatrix);
+          m.rotate(mMatrix, rad, [1.0, 1.0, 0.0], mMatrix);
+          m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+
+          // 法線変換マトリックスの生成
+          m.multiply(vMatrix, mMatrix, mvMatrix);
+          m.inverse(mvMatrix, invMatrix);
+          m.transpose(invMatrix, normalMatrix);
+
+          gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+          gl.uniformMatrix4fv(uniLocation[1], false, normalMatrix);
+          gl.uniform1i(uniLocation[2], 0);
+          gl.drawElements(gl.TRIANGLES, sphereData.i.length, gl.UNSIGNED_SHORT, 0);
+
+          // トーラスをレンダリング
+          set_attribute(tVBOList, attLocation, attStride);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tIndex);
+          gl.drawElements(gl.TRIANGLES, torusData.i.length, gl.UNSIGNED_SHORT, 0);
+
+          // コンテキストの描画
+          gl.flush();
+
+          // ループのために再帰呼び出し
+          if(run){requestAnimationFrame(render);}
+        };
+      };
+
+      // シェーダを生成する関数
+      function create_shader(id){
+        // シェーダを格納する変数
+        var shader;
+
+        // HTMLからscriptタグへの参照を取得
+        var scriptElement = document.getElementById(id);
+
+        // scriptタグが存在しない場合は抜ける
+        if(!scriptElement){return;}
+
+        // scriptタグのtype属性をチェック
+        switch(scriptElement.type){
+
+          // 頂点シェーダの場合
+          case 'x-shader/x-vertex':
+            shader = gl.createShader(gl.VERTEX_SHADER);
+            break;
+
+            // フラグメントシェーダの場合
+          case 'x-shader/x-fragment':
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+            break;
+          default:
+            return;
+        };
+
+        // 生成されたシェーダにソースを割り当てる
+        gl.shaderSource(shader, scriptElement.text);
+
+        // シェーダをコンパイルする
+        gl.compileShader(shader);
+
+        // シェーダが正しくコンパイルされたかチェック
+        if(gl.getShaderParameter(shader, gl.COMPILE_STATUS)){
+
+          // 成功していたらシェーダを返して終了
+          return shader;
+        }else{
+
+          // 失敗していたらエラーログをアラートする
+          alert(gl.getShaderInfoLog(shader));
+        }
+      };
+
+      // プログラムオブジェクトを生成しシェーダをリンクする関数
+      function create_program(vs, fs){
+        // プログラムオブジェクトの生成
+        var program = gl.createProgram();
+
+        // プログラムオブジェクトにシェーダを割り当てる
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+
+        // シェーダをリンク
+        gl.linkProgram(program);
+
+        // シェーダのリンクが正しく行なわれたかチェック
+        if(gl.getProgramParameter(program, gl.LINK_STATUS)){
+
+          // 成功していたらプログラムオブジェクトを有効にする
+          gl.useProgram(program);
+
+          // プログラムオブジェクトを返して終了
+          return program;
+        }else{
+
+          // 失敗していたらエラーログをアラートする
+          alert(gl.getProgramInfoLog(program));
+          console.log(gl.getProgramInfoLog(program));
+        }
+      };
+
+
+      // create WebGLBuffer for vertex
+      function create_vbo(data) {
+        var vbo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        return vbo;
+      };
+
+      // VBOをバインドし登録する関数
+      function set_attribute(vbo, attL, attS){
+        // 引数として受け取った配列を処理する
+        for(var i in vbo){
+          // バッファをバインドする
+          gl.bindBuffer(gl.ARRAY_BUFFER, vbo[i]);
+
+          // attributeLocationを有効にする
+          gl.enableVertexAttribArray(attL[i]);
+
+          // attributeLocationを通知し登録する
+          gl.vertexAttribPointer(attL[i], attS[i], gl.FLOAT, false, 0, 0);
+        }
+      };
+
+      // create WebGLBuffer for index
+      function create_ibo(data) {
+        var ibo = gl.createBuffer();
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Int16Array(data), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        return ibo;
+      };
+
+      // テクスチャを生成する関数
+      function create_texture(source, number){
+        // イメージオブジェクトの生成
+        var img = new Image();
+
+        // データのオンロードをトリガーにする
+        img.onload = function(){
+          // テクスチャオブジェクトの生成
+          var tex = gl.createTexture();
+
+          // テクスチャをバインドする
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+
+          // テクスチャへイメージを適用
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+          // テクスチャパラメータ
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+          // ミップマップを生成
+          gl.generateMipmap(gl.TEXTURE_2D);
+
+          // テクスチャのバインドを無効化
+          gl.bindTexture(gl.TEXTURE_2D, null);
+
+          // 生成したテクスチャをグローバル変数に代入
+          textures[number] = tex;
+        };
+
+        // イメージオブジェクトのソースを指定
+        img.src = source;
+      }
+
+      // フレームバッファをオブジェクトとして生成する関数
+      function create_framebuffer_MRT(width, height){
+        // フレームバッファの生成
+        var frameBuffer = gl.createFramebuffer();
+
+        // フレームバッファをWebGLにバインド
+        gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+
+        // フレームバッファ用テクスチャを格納する配列
+        var fTexture = [];
+
+        // ループ処理でテクスチャを初期化
+        for(var i = 0; i < 4; i++){
+          fTexture[i] = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, fTexture[i]);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+          // テクスチャパラメータ
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+          // フレームバッファにテクスチャを関連付ける
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, ext.COLOR_ATTACHMENT0_WEBGL + i, gl.TEXTURE_2D, fTexture[i], 0);
+        }
+
+        // 深度バッファ用レンダーバッファ
+        var depthRenderBuffer = gl.createRenderbuffer();
+        gl.bindRenderbuffer(gl.RENDERBUFFER, depthRenderBuffer);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthRenderBuffer);
+
+        // 各種オブジェクトのバインドを解除
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        // オブジェクトを返して終了
+        return {
+          f: frameBuffer,
+          d: depthRenderBuffer,
+          t: fTexture
+        };
+      };
+
+      // // フレームバッファをオブジェクトとして生成する関数
+      // function create_framebuffer(width, height){
+      //   var frameBuffer = gl.createFramebuffer();
+      //   gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+      //
+      //   var depthRenderBuffer = gl.createRenderbuffer();
+      //   gl.bindRenderbuffer(gl.RENDERBUFFER, depthRenderBuffer);
+      //   gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+      //   gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthRenderBuffer);
+      //
+      //   var fTexture = gl.createTexture();
+      //   gl.bindTexture(gl.TEXTURE_2D, fTexture);
+      //   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT, null);
+      //
+      //   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      //   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      //   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      //   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      //
+      //   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fTexture, 0);
+      //
+      //   gl.bindTexture(gl.TEXTURE_2D, null);
+      //   gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+      //   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      //
+      //   return {f: frameBuffer, d: depthRenderBuffer, t: fTexture};
+      // };
+      //
+      function create_cube_texture(source, target) {
+        var cImg = [];
+        for(var i = 0; i < source.length; i ++) {
+          cImg[i] = new cubeMapImage();
+          cImg[i].data.src = source[i];
+        };
+
+        function cubeMapImage() {
+          this.data = new Image();
+          this.data.onload = function() {
+            this.imageDataLoaded = true;
+            checkLoaded();
+          };
+        };
+
+        function checkLoaded() {
+          if(cImg[0].data.imageDataLoaded &&
+             cImg[1].data.imageDataLoaded &&
+             cImg[2].data.imageDataLoaded &&
+             cImg[3].data.imageDataLoaded &&
+             cImg[4].data.imageDataLoaded &&
+             cImg[5].data.imageDataLoaded){generateCubeMap();}
+        };
+
+        function generateCubeMap() {
+          var tex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_CUBE_MAP, tex);
+          for(var j = 0; j < source.length; j++) {
+            gl.texImage2D(target[j], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cImg[j].data);
+          }
+          gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          cubeTexture = tex;
+          gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+        }
+      };
+    };
+
+    </script>
+  </body>
+</html>
